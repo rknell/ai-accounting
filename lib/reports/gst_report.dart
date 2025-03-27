@@ -18,6 +18,7 @@ class GSTReport extends BaseReport {
     try {
       final generalJournalService = services.generalJournal;
       final chartOfAccounts = services.chartOfAccounts;
+      final environment = services.environment;
 
       // Get all GST applicable income and expense accounts
       final incomeAccounts = chartOfAccounts
@@ -34,7 +35,7 @@ class GSTReport extends BaseReport {
 
       // Get the GST clearing account
       final gstAccount =
-          chartOfAccounts.getAccount("506"); // GST Clearing account
+          chartOfAccounts.getAccount(environment.gstClearingAccountCode);
 
       // Calculate totals for each account within the date range
       final incomeTotals = <String, double>{};

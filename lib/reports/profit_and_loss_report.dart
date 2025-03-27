@@ -301,15 +301,15 @@ $commonScripts
             <tbody>
                 <tr>
                     <td>Total Income Transactions</td>
-                    <td class="amount">${totalIncomeTransactions}</td>
+                    <td class="amount">$totalIncomeTransactions</td>
                 </tr>
                 <tr>
                     <td>Total COGS Transactions</td>
-                    <td class="amount">${totalCogsTransactions}</td>
+                    <td class="amount">$totalCogsTransactions</td>
                 </tr>
                 <tr>
                     <td>Total Expense Transactions</td>
-                    <td class="amount">${totalExpenseTransactions}</td>
+                    <td class="amount">$totalExpenseTransactions</td>
                 </tr>
                 <tr class="total-row">
                     <td>Grand Total Transactions</td>

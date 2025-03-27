@@ -2,6 +2,7 @@ import 'package:ai_accounting/services/account_code_service.dart';
 import 'package:ai_accounting/services/bank_statement_service.dart';
 import 'package:ai_accounting/services/chart_of_accounts_service.dart';
 import 'package:ai_accounting/services/deepseek_client.dart';
+import 'package:ai_accounting/services/environment_service.dart';
 import 'package:ai_accounting/services/general_journal_service.dart';
 import 'package:ai_accounting/services/reports.dart';
 import 'package:get_it/get_it.dart';
@@ -29,6 +30,9 @@ class Services {
 
   /// Private instance of the ReportsService
   ReportsService? _reports;
+
+  /// Private instance of the EnvironmentService
+  EnvironmentService? _environment;
 
   /// Instance of the ChartOfAccountsService
   ///
@@ -78,6 +82,15 @@ class Services {
   /// balance sheets, and GST reports. Lazily instantiated when first accessed.
   ReportsService get reports {
     return _reports ??= ReportsService(this);
+  }
+
+  /// Instance of the EnvironmentService
+  ///
+  /// Provides access to environment variables and configuration settings.
+  /// Used for accessing account codes and other environment-specific values.
+  /// Lazily instantiated when first accessed.
+  EnvironmentService get environment {
+    return _environment ??= EnvironmentService();
   }
 }
 

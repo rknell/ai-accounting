@@ -16,7 +16,7 @@ class EnvironmentService {
   ///
   /// Loads environment variables from the platform environment and .env file.
   /// The platform environment variables take precedence over the .env file.
-  /// 
+  ///
   /// Throws an [Exception] if required environment variables are missing:
   /// - DEEPSEEK_API_KEY: Required for API authentication
   /// - DEEPSEEK_MODEL: Required to specify which model to use
@@ -38,7 +38,7 @@ class EnvironmentService {
   ///
   /// Returns the value of the environment variable with the given [key].
   /// If the environment variable is not found, returns [defaultValue].
-  /// 
+  ///
   /// Example:
   /// ```dart
   /// final port = int.parse(environment.get('PORT', defaultValue: '8080'));
@@ -51,7 +51,7 @@ class EnvironmentService {
   ///
   /// Returns the DeepSeek API key from the environment variables.
   /// If not found, returns an empty string.
-  /// 
+  ///
   /// This key is required for authenticating requests to the DeepSeek API.
   String get deepseekApiKey => get('DEEPSEEK_API_KEY');
 
@@ -60,9 +60,27 @@ class EnvironmentService {
   /// Returns the DeepSeek model identifier from the environment variables.
   /// If not found, returns an empty string.
   /// This value is used to specify which AI model to use for processing.
-  /// 
+  ///
   /// Common values might include model versions like 'deepseek-coder-v1.5'.
   String get deepseekModel => get('DEEPSEEK_MODEL');
+
+  /// Gets the GST clearing account code.
+  ///
+  /// Returns the account code used for GST clearing from environment variables.
+  /// If not found, defaults to '506'.
+  ///
+  /// This account code is used for GST-related transactions and reporting.
+  String get gstClearingAccountCode =>
+      get('GST_CLEARING_ACCOUNT_CODE', defaultValue: '506');
+
+  /// Gets the owner's equity account code.
+  ///
+  /// Returns the account code used for owner's equity from environment variables.
+  /// If not found, defaults to '700'.
+  ///
+  /// This account code is used for equity transactions and balance sheet reporting.
+  String get ownersEquityAccountCode =>
+      get('OWNERS_EQUITY_ACCOUNT_CODE', defaultValue: '700');
 }
 
 /// Global accessor for the EnvironmentService instance

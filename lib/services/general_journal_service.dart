@@ -5,6 +5,7 @@ import 'package:ai_accounting/models/account.dart';
 import 'package:ai_accounting/models/bank_import_models.dart';
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/models/split_transaction.dart';
+import 'package:ai_accounting/services/environment_service.dart';
 import 'package:ai_accounting/services/services.dart';
 
 /// Service that provides access to general journal data
@@ -123,7 +124,7 @@ class GeneralJournalService {
 
   /// Creates an opening balance entry for a bank account
   ///
-  /// This method creates an opening balance transaction using account code 700 (Equity)
+  /// This method creates an opening balance transaction using the owner's equity account code
   /// and the bank account from the provided journal entry. The transaction date is set
   /// to midnight on the same day as the entry.
   void createOpeningBalance(GeneralJournal entry) {
@@ -137,6 +138,7 @@ class GeneralJournalService {
             .subtract(const Duration(days: 1));
 
     var bankAccount = entry.bankAccount;
+    final equityAccountCode = environment.ownersEquityAccountCode;
 
     // Create the opening balance entry with appropriate split transactions
     final openingBalanceEntry = GeneralJournal(
@@ -148,10 +150,14 @@ class GeneralJournalService {
                   accountCode: bankAccount.code, amount: openingBalance.abs())
             ]
           : [
-              SplitTransaction(accountCode: "700", amount: openingBalance.abs())
+              SplitTransaction(
+                  accountCode: equityAccountCode, amount: openingBalance.abs())
             ],
       credits: openingBalance > 0
-          ? [SplitTransaction(accountCode: "700", amount: openingBalance.abs())]
+          ? [
+              SplitTransaction(
+                  accountCode: equityAccountCode, amount: openingBalance.abs())
+            ]
           : [
               SplitTransaction(
                   accountCode: bankAccount.code, amount: openingBalance.abs())
@@ -193,8 +199,8 @@ class GeneralJournalService {
       final gstAmount = amount * (gstRate / (1 + gstRate));
       final netAmount = amount - gstAmount;
 
-      // GST clearing account is 506
-      final gstAccount = "506";
+      // Get GST clearing account code from environment
+      final gstAccount = environment.gstClearingAccountCode;
 
       // Create appropriate splits depending on whether this is income or expense
       if (isGstOnIncome) {

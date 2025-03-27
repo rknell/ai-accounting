@@ -87,7 +87,7 @@ class BalanceSheetReport extends BaseReport {
       final ownerEquityAccount = equityAccounts.firstWhere(
         (account) => account.name.toLowerCase().contains("owner's equity"),
         orElse: () => Account(
-          code: '700',
+          code: services.environment.ownersEquityAccountCode,
           name: "Owner's Equity",
           type: AccountType.equity,
           gst: false,

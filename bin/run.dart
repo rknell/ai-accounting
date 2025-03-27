@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'package:path/path.dart' as path;
 
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/services/services.dart';
+import 'package:path/path.dart' as path;
 
 // Define categorizedTransactions map (temporary until we move this to a proper service)
 final Map<String, String> categorizedTransactions = {};

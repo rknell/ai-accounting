@@ -547,7 +547,7 @@ abstract class BaseReport {
     return '''
         $transactionsScript
         <tr class="account-row" onclick="showTransactions('${account.code}', '$escapedName')">
-            <td class="account-name">${account.code} - ${account.name} <span class="inline-count">(${transactionCount} txn)</span></td>
+            <td class="account-name">${account.code} - ${account.name} <span class="inline-count">($transactionCount txn)</span></td>
             <td class="amount">${formatCurrency(value)}</td>
         </tr>
 ''';
