@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:ai_accounting/models/general_journal.dart';
+import 'package:ai_accounting/reports/general_journal_report.dart';
+import 'package:ai_accounting/reports/ledger_report.dart';
 import 'package:ai_accounting/services/services.dart';
 import 'package:path/path.dart' as path;
 
@@ -61,6 +63,11 @@ Future<void> main() async {
 
   // Generate GST report
   services.reports.generateGSTReport(quarterStart, quarterEnd);
+
+  final report = GeneralJournalReport(services);
+  report.generate(quarterStart, quarterEnd);
+
+  LedgerReport(services).generate(quarterStart, quarterEnd);
 
   // Generate report wrapper for easy navigation
   services.reports.generateReportWrapper();
