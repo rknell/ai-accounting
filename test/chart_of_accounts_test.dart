@@ -15,9 +15,9 @@ void main() {
     expect(accounts, isNotEmpty);
 
     // Check for specific account
-    final bankAccount = service.getAccount('090');
+    final bankAccount = service.getAccount('001');
     expect(bankAccount, isNotNull);
-    expect(bankAccount?.name, equals('Bendigo Bank'));
+    expect(bankAccount?.name, equals('Rebellion Rum Co'));
     expect(bankAccount?.type, equals(AccountType.bank));
     expect(bankAccount?.gst, isFalse);
     expect(bankAccount?.gstType, equals(GstType.basExcluded));

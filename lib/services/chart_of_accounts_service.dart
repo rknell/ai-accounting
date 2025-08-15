@@ -56,4 +56,83 @@ class ChartOfAccountsService {
   List<Account> getAccountsByType(AccountType type) {
     return accounts.values.where((account) => account.type == type).toList();
   }
+
+  /// Adds a new account to the chart of accounts
+  ///
+  /// Returns true if successful, false otherwise
+  /// Throws exception if account code already exists or is in protected range
+  bool addAccount(Account newAccount) {
+    // Check if account code already exists
+    if (accounts.containsKey(newAccount.code)) {
+      throw Exception('Account code ${newAccount.code} already exists');
+    }
+
+    // 🛡️ **SECURITY CHECK**: Prevent bank account creation (001-099)
+    final codeNum = int.tryParse(newAccount.code);
+    if (codeNum != null && codeNum >= 1 && codeNum <= 99) {
+      throw Exception(
+          'Cannot create account in protected bank range (001-099): ${newAccount.code}');
+    }
+
+    // Add to memory
+    accounts[newAccount.code] = newAccount;
+
+    // Save to file
+    return saveAccounts();
+  }
+
+  /// Saves all accounts to the JSON file
+  ///
+  /// Returns true if successful, false otherwise
+  bool saveAccounts() {
+    try {
+      final file = File('inputs/accounts.json');
+
+      // Convert accounts to list and sort by account code
+      final accountsList = accounts.values.toList();
+      accountsList.sort((a, b) => a.code.compareTo(b.code));
+
+      // Convert to JSON
+      final jsonString =
+          jsonEncode(accountsList.map((a) => a.toJson()).toList());
+
+      // Write to file with pretty formatting
+      final prettyJsonString = _formatJson(jsonString);
+      file.writeAsStringSync(prettyJsonString);
+
+      return true;
+    } catch (e) {
+      print('Error saving accounts: $e');
+      return false;
+    }
+  }
+
+  /// Formats JSON string with proper indentation for readability
+  String _formatJson(String jsonString) {
+    try {
+      final dynamic jsonData = jsonDecode(jsonString);
+      const encoder = JsonEncoder.withIndent('  ');
+      return encoder.convert(jsonData);
+    } catch (e) {
+      // If formatting fails, return original string
+      return jsonString;
+    }
+  }
+
+  /// Validates that an account code is available
+  bool isAccountCodeAvailable(String code) {
+    return !accounts.containsKey(code);
+  }
+
+  /// Gets the next available account code in a range
+  ///
+  /// For example, if you want the next available code starting from 320,
+  /// it will return 320 if available, otherwise 321, 322, etc.
+  String getNextAvailableAccountCode(int startingCode) {
+    int code = startingCode;
+    while (accounts.containsKey(code.toString().padLeft(3, '0'))) {
+      code++;
+    }
+    return code.toString().padLeft(3, '0');
+  }
 }

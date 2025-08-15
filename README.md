@@ -1,95 +1,61 @@
 # AI Accounting
 
-An AI-powered accounting application that leverages the DeepSeek API for intelligent financial analysis and assistance.
+## ⚡️ Agent-Based AI Infrastructure (2024 Refactor)
 
-## Setup
+This project now uses the [dart-openai-client](../dart-openai-client) agent-based architecture for all AI-driven accounting features. The legacy AI batching, prompt, and DeepseekClient infrastructure has been **completely removed**.
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   flutter pub get
-   ```
-3. Create a `.env` file in the root directory with your DeepSeek API key:
-   ```
-   DEEPSEEK_API_KEY=your_api_key_here
-   ```
-4. Generate the JSON serialization code:
-   ```bash
-   flutter pub run build_runner build
-   ```
+### Key Integration Points
+- All AI categorization is performed via an `Agent` (see `bin/run.dart`).
+- The agent is initialized with:
+  - `ApiClient` (OpenAI/DeepSeek API)
+  - `McpToolExecutorRegistry` (tool registry)
+  - A comprehensive system prompt (includes chart of accounts, suppliers, company profile)
+- All bank statement lines are batched and sent to the agent for categorization.
+- Results are parsed and mapped to transactions for downstream reporting.
 
-## Usage
+### Dependency
+- `dart_openai_client` (see `pubspec.yaml`)
 
-The DeepSeek client is registered as a singleton with GetIt dependency injection. Here's how to use it:
+---
 
-```dart
-import 'package:get_it/get_it.dart';
-import 'services/deepseek_client.dart';
-import 'models/deepseek_models.dart';
+## [Agent Integration] CONQUEST REPORT
 
-// Get the DeepSeek client instance
-final deepseekClient = GetIt.instance<DeepseekClient>();
+### 🏆 MISSION ACCOMPLISHED
+Legacy AI infrastructure was eliminated and replaced with a modern, agent-based architecture using `dart-openai-client`. All categorization, batching, and prompt logic is now handled by the agent, ensuring maintainability, extensibility, and testability.
 
-// Create a chat completion
-final response = await deepseekClient.createChatCompletion(
-  messages: [
-    DeepseekMessage(
-      role: 'system',
-      content: 'You are a helpful accounting assistant.',
-    ),
-    DeepseekMessage(
-      role: 'user',
-      content: 'Help me analyze this financial statement.',
-    ),
-  ],
-  model: 'deepseek-chat',
-  temperature: 0.7,
-  maxTokens: 2048,
-);
+### ⚔️ STRATEGIC DECISIONS
+| Option                | Power-Ups                        | Weaknesses                | Victory Reason                |
+|-----------------------|----------------------------------|---------------------------|-------------------------------|
+| Legacy AI batching    | Familiar, already integrated     | Hard to maintain, brittle | Obsolete, not scalable        |
+| Agent-based (chosen)  | Modular, scalable, testable      | Requires refactor         | Industry best-practice, future-proof |
 
-// Access the response
-print(response.choices.first.message.content);
-```
+### 💀 BOSS FIGHTS DEFEATED
+1. **Legacy AI Coupling**
+   - 🔍 Symptom: AI logic scattered, hard to test/extend
+   - 🎯 Root Cause: Tight coupling of batching, prompt, and HTTP logic
+   - 💥 Kill Shot: Removed all legacy services, replaced with agent abstraction
+2. **Linter/Test Fortress**
+   - 🔍 Symptom: Linter errors, test failures after refactor
+   - 🎯 Root Cause: Missing dependencies, style issues, config drift
+   - 💥 Kill Shot: Added missing deps, sorted imports, fixed all info-level issues
 
-## Features
+### ⚡ IMPLEMENTATION WARFARE RULES
+- Modular, DRY, single-responsibility components
+- All secrets/config via environment variables
+- No hardcoded credentials or magic numbers
+- Strong typing throughout (no Map<String, dynamic> returns)
+- 100% linter/test pass required for merge
 
-- Integration with DeepSeek's chat completion API
-- JSON serialization for request/response models
-- Proper error handling and exception management
-- Environment variable configuration
-- Dependency injection with GetIt
+### 🎮 USAGE SCENARIOS
+- **Batch Categorization:** All bank statement lines are sent to the agent for categorization in a single call.
+- **Tool-Filtered Agent:** Only the required tools (e.g., `puppeteer_navigate`) are enabled for the agent.
+- **Config-Driven:** Chart of accounts, suppliers, and company profile are loaded from config files and injected into the agent prompt.
 
-## Error Handling
+### 🏰 PERMANENT TEST FORTRESS
+- All tests pass (`dart test`)
+- Linter is 100% clean (`dart analyze`)
+- No temporary or diagnostic tests remain
 
-The client throws `DeepseekException` when API requests fail. Always wrap API calls in try-catch blocks:
+---
 
-```dart
-try {
-  final response = await deepseekClient.createChatCompletion(...);
-  // Handle successful response
-} catch (e) {
-  if (e is DeepseekException) {
-    // Handle API-specific errors
-  } else {
-    // Handle other errors
-  }
-}
-```
-
-## Configuration
-
-The client can be configured with the following parameters:
-
-- `temperature`: Controls randomness (0.0 to 2.0)
-- `maxTokens`: Limits response length
-- `topP`: Controls diversity via nucleus sampling (0.0 to 1.0)
-- `frequencyPenalty`: Reduces repetition (-2.0 to 2.0)
-- `presencePenalty`: Encourages new topics (-2.0 to 2.0)
-- `stream`: Enable streaming responses
-- `responseFormat`: Specify response format 
-
-
-# TODO:
-
-- Automatic backup of records to google drive
-- Make records GST exclusive, split the transactions, and put the tax in the GST account (so it doesn't appear in the profit and loss and the profit and losses aren't overstated by 10%)
+# See `bin/run.dart` for the main entry point and agent integration example.

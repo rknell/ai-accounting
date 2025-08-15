@@ -1,9 +1,8 @@
-import 'package:ai_accounting/services/account_code_service.dart';
 import 'package:ai_accounting/services/bank_statement_service.dart';
 import 'package:ai_accounting/services/chart_of_accounts_service.dart';
-import 'package:ai_accounting/services/deepseek_client.dart';
 import 'package:ai_accounting/services/environment_service.dart';
 import 'package:ai_accounting/services/general_journal_service.dart';
+import 'package:ai_accounting/services/report_generation_service.dart';
 import 'package:ai_accounting/services/reports.dart';
 import 'package:get_it/get_it.dart';
 
@@ -15,12 +14,6 @@ import 'package:get_it/get_it.dart';
 class Services {
   /// Private instance of the ChartOfAccountsService
   ChartOfAccountsService? _chartOfAccounts;
-
-  /// Private instance of the DeepseekClient
-  DeepseekClient? _deepseekClient;
-
-  /// Private instance of the AccountCodeService
-  AccountCodeService? _accountCodes;
 
   /// Private instance of the GeneralJournalService
   GeneralJournalService? _generalJournal;
@@ -34,29 +27,15 @@ class Services {
   /// Private instance of the EnvironmentService
   EnvironmentService? _environment;
 
+  /// Private instance of the ReportGenerationService
+  ReportGenerationService? _reportGeneration;
+
   /// Instance of the ChartOfAccountsService
   ///
   /// This getter provides access to the chart of accounts functionality
   /// throughout the application. It is lazily instantiated when first accessed.
   ChartOfAccountsService get chartOfAccounts {
     return _chartOfAccounts ??= ChartOfAccountsService();
-  }
-
-  /// Instance of the DeepseekClient
-  ///
-  /// Provides access to the DeepSeek AI API for natural language processing
-  /// and AI-assisted accounting operations. Lazily instantiated when first accessed.
-  DeepseekClient get deepseekClient {
-    return _deepseekClient ??= DeepseekClient();
-  }
-
-  /// Instance of the AccountCodeService
-  ///
-  /// Manages account codes and their mappings, providing functionality for
-  /// categorizing transactions and determining appropriate account codes.
-  /// Lazily instantiated when first accessed.
-  AccountCodeService get accountCodes {
-    return _accountCodes ??= AccountCodeService();
   }
 
   /// Instance of the GeneralJournalService
@@ -91,6 +70,15 @@ class Services {
   /// Lazily instantiated when first accessed.
   EnvironmentService get environment {
     return _environment ??= EnvironmentService();
+  }
+
+  /// Instance of the ReportGenerationService
+  ///
+  /// Handles the generation of all financial reports including profit and loss,
+  /// balance sheet, GST reports, and backup of input files.
+  /// Lazily instantiated when first accessed.
+  ReportGenerationService get reportGeneration {
+    return _reportGeneration ??= ReportGenerationService(this);
   }
 }
 

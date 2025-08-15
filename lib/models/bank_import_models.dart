@@ -1,5 +1,3 @@
-import 'package:ai_accounting/services/services.dart';
-
 /// Represents a bank statement import file containing transaction data
 ///
 /// This class holds the raw transaction data imported from a bank statement file
@@ -60,26 +58,9 @@ class RawFileRow {
   /// The AI-generated reasoning for the account code assignment
   String reason;
 
-  /// Retrieves an account code for this transaction using the AccountCodeService
-  ///
-  /// This method calls the AI service to analyze the transaction and determine
-  /// the appropriate account code based on the transaction description and other details.
-  /// The result is stored in the accountCode and reason properties.
-  ///
-  /// @return A Future that completes when the account code has been retrieved
-  Future<void> getAccountCode() async {
-    // Get the account code using the AccountCodeService
-    try {
-      final result = await services.accountCodes.getAccountCode(this);
-      accountCode = result.accountCode;
-      reason = result.reasoning;
-      return;
-    } catch (e) {
-      print('Error getting account code for transaction: $e');
-      accountCode = 'ERROR';
-      reason = 'Failed to get account code: $e';
-    }
-  }
+  /// Returns the transaction as a tab-separated line for agent communication
+  String get asStatementLine =>
+      "${date.toIso8601String().substring(0, 10)}\t$description\t$debit\t$credit\t$balance";
 
   /// Returns a cleaned version of the transaction description
   ///

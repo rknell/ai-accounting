@@ -343,6 +343,36 @@ class GeneralJournalService {
         .toList();
   }
 
+  /// Updates an existing journal entry by replacing it with a new one
+  ///
+  /// This method finds an existing entry that matches the provided original entry
+  /// and replaces it with the updated entry. This is useful for re-categorizing
+  /// transactions or correcting account codes.
+  ///
+  /// @param originalEntry The existing entry to replace
+  /// @param updatedEntry The new entry to replace it with
+  /// @return True if the entry was found and replaced, false otherwise
+  bool updateEntry(GeneralJournal originalEntry, GeneralJournal updatedEntry) {
+    final index = entries.indexWhere((entry) => entry == originalEntry);
+    if (index != -1) {
+      entries[index] = updatedEntry;
+      return saveEntries();
+    }
+    return false;
+  }
+
+  /// Removes an entry from the general journal
+  ///
+  /// @param entry The entry to remove
+  /// @return True if the entry was found and removed, false otherwise
+  bool removeEntry(GeneralJournal entry) {
+    final removed = entries.remove(entry);
+    if (removed) {
+      saveEntries();
+    }
+    return removed;
+  }
+
   /// Calculates the balance for a specific account as of a given date
   ///
   /// This function computes the running balance for an account by summing all

@@ -7,14 +7,16 @@ environment:
   sdk: '>=3.6.0 <4.0.0'
 
 dependencies:
-  dotenv: ^4.1.0
-  get_it: ^7.6.7
-  http: ^1.2.0
-  json_annotation: ^4.9.0
+  dart_openai_client:
+    path: ../dart-openai-client
+  dotenv: ^4.2.0
+  get_it: any
+  json_annotation: any
   path: any
+  puppeteer: ^3.19.0
+  test: any
 
 dev_dependencies:
   build_runner: ^2.4.8
   json_serializable: ^6.7.1
-  lints: ^3.0.0
-  test: ^1.24.9 
+  lints: ^3.0.0 

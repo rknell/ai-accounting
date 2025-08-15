@@ -17,6 +17,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.7.1"
+  archive:
+    dependency: transitive
+    description:
+      name: archive
+      sha256: "2fde1607386ab523f7a36bb3e7edb43bd58e6edaf2ffb29d8a6d578b297fdbbd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.0.7"
   args:
     dependency: transitive
     description:
@@ -161,6 +169,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.6"
+  dart_openai_client:
+    dependency: "direct main"
+    description:
+      path: "../dart-openai-client"
+      relative: true
+    source: path
+    version: "0.1.0"
   dart_style:
     dependency: transitive
     description:
@@ -177,6 +192,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.2.0"
+  ffi:
+    dependency: transitive
+    description:
+      name: ffi
+      sha256: "289279317b4b16eb2bb7e271abccd4bf84ec9bdcbe999e278a94b804f5630418"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.4"
   file:
     dependency: transitive
     description:
@@ -226,7 +249,7 @@ packages:
     source: hosted
     version: "2.3.2"
   http:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: http
       sha256: bb2ce4590bc2667c96f318d68cac1b5a7987ec819351d32b1c987239a815e007
@@ -345,6 +368,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.9.1"
+  petitparser:
+    dependency: transitive
+    description:
+      name: petitparser
+      sha256: "07c8f0b1913bcde1ff0d26e57ace2f3012ccbf2b204e070290dad3bb22797646"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.1.0"
   pool:
     dependency: transitive
     description:
@@ -353,6 +384,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.1"
+  posix:
+    dependency: transitive
+    description:
+      name: posix
+      sha256: "6323a5b0fa688b6a010df4905a56b00181479e6d10534cecfecede2aa55add61"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.0.3"
   pub_semver:
     dependency: transitive
     description:
@@ -369,6 +408,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.0"
+  puppeteer:
+    dependency: "direct main"
+    description:
+      name: puppeteer
+      sha256: e072dc2e8de31934c24d3efa9d4ce3cbedf5d9a83a4e503c086ab3a6e2ed644f
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.19.0"
   shelf:
     dependency: transitive
     description:
@@ -482,7 +529,7 @@ packages:
     source: hosted
     version: "1.2.2"
   test:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: test
       sha256: "75906bf273541b676716d1ca7627a17e4c4070a3a16272b7a3dc7da3b9f3f6b7"

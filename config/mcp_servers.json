@@ -1,0 +1,32 @@
+{
+    "mcpServers": {
+        "accountant": {
+            "command": "dart",
+            "args": [
+                "run",
+                "mcp/mcp_server_accountant.dart"
+            ],
+            "env": {},
+            "description": "Accountant MCP server for secure accounting operations and transaction management"
+        },
+        "puppeteer": {
+            "command": "dart",
+            "args": [
+                "run",
+                "mcp/mcp_server_puppeteer.dart"
+            ],
+            "env": {},
+            "description": "Puppeteer MCP server for web automation and scraping"
+        },
+        "filesystem": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "."
+            ],
+            "env": {},
+            "description": "Filesystem MCP server for file operations with access to current directory"
+        }
+    }
+}
