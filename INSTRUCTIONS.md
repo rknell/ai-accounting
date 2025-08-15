@@ -18,15 +18,26 @@
 - Github → Website & Online Fees (306)
 - Coles/Woolworths → Other Ingredients (206)
 - Fermentables Purchases (200) → Only for molasses or purchases from Campbells/Metcash
+- Tarac & Wilmar Bioethanol is our supplier for spirit neutral ethanol to be used in products
+- Chemron are a chemical supplies store
 - 7Eleven/United/Coles Express → Vehicle Expenses (309)
 - MyPost is postage
-- Osko Withdrawal is always an expense
+- "Osko Withdrawal" is simply a withdrawal / payment to another supplier. Ignore the Osko Withdrawal term when determining what account to add it into except that it will be a payment, not a sale.
 - Uniquepak is out bottle supplier
 - Label Plus does our labels
 - Zero Alpha is data recovery
+- Sponsorships & Rotary are Advertising
+- Click Business are for Click Business Cards
+- Adrian Smith maintains our distillery equipment
+- Siddament are a 3d filament provider
+- Consider wages to be owners drawings
+- Small Transport move our molasses IBCs around
 
 ## TAX Rules
 - Rarely will we have to pay excise tax, but if we do it will mention its for excise
+- ATO is the Australian Taxation office.
+- GST payments should offset the GST holding account.
+- PAYG installments should go against an asset account as a prepaid income tax.
 
 ## Capitalization Rules
 - Depreciate only transactions > $20000, expense all else immediately

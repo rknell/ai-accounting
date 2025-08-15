@@ -1,5 +1,4 @@
 import 'package:ai_accounting/models/account.dart';
-import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/reports/base_report.dart';
 import 'package:ai_accounting/services/chart_of_accounts_service.dart';
 
@@ -323,7 +322,7 @@ $commonStyles
                     <td>${transaction.description}</td>
                     <td class="amount-cell">${transaction.debit > 0 ? formatCurrency(transaction.debit) : ''}</td>
                     <td class="amount-cell">${transaction.credit > 0 ? formatCurrency(transaction.credit) : ''}</td>
-                    <td class="balance-cell ${balanceClass}">${formatCurrency(transaction.balance.abs())}</td>
+                    <td class="balance-cell $balanceClass">${formatCurrency(transaction.balance.abs())}</td>
                 </tr>
 ''');
     }

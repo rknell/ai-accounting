@@ -1,4 +1,3 @@
-import 'package:ai_accounting/models/account.dart';
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/reports/base_report.dart';
 import 'package:ai_accounting/services/chart_of_accounts_service.dart';

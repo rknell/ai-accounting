@@ -290,14 +290,7 @@ class AccountCodeService {
 
         // Add each account as CSV row to output, but only revenue and expense types
         for (final account in accounts) {
-          final accountType = account.type.toString().toLowerCase();
-          // Only include revenue, expense, cogs, and otherIncome account types
-          if (accountType == 'revenue' ||
-              accountType == 'expense' ||
-              accountType == 'cogs' ||
-              accountType == 'otherincome') {
-            output.writeln('${account.code},${account.name},${account.type}');
-          }
+          output.writeln('${account.code},${account.name},${account.type}');
         }
 
         output.writeln('\n');

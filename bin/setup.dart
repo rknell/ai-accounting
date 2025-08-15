@@ -1,4 +1,3 @@
-import 'package:ai_accounting/services/services.dart';
 
 /// Tasks required for setup
 /// 1. Create a chart of accounts relevant to a business doing cash accounting
