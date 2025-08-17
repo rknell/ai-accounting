@@ -1,4 +1,291 @@
-.dart_tool
-data
-inputs
+# ⚔️ AI ACCOUNTING PROJECT - COMPREHENSIVE .GITIGNORE ⚔️
+# Generated for Dart/Flutter accounting application with MCP servers
+
+# ==============================================================================
+# 🎯 DART/FLUTTER BUILD ARTIFACTS
+# ==============================================================================
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+pubspec.lock
+build/
+
+# Generated files
+*.g.dart
+*.freezed.dart
+*.mocks.dart
+*.config.dart
+
+# Coverage reports
+coverage/
+lcov.info
+
+# ==============================================================================
+# 🏗️ IDE AND EDITOR FILES
+# ==============================================================================
+# IntelliJ/Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# ==============================================================================
+# 💻 OPERATING SYSTEM FILES
+# ==============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.tmp
+*.temp
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ==============================================================================
+# 🔐 SECURITY AND ENVIRONMENT
+# ==============================================================================
+# Environment variables and secrets
 .env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+*.keystore
+secrets.json
+config/secrets/
+
+# API keys and credentials
+api_keys.json
+credentials.json
+service_account.json
+firebase_options.dart
+
+# ==============================================================================
+# 📊 PROJECT-SPECIFIC DATA AND OUTPUTS
+# ==============================================================================
+# Accounting data files
+data/
+inputs/
+outputs/
+exports/
+reports/
+backups/
+
+# Logs and debugging
+logs/
+*.log
+debug.log
+error.log
+crash.log
+
+# Temporary files and caches
+tmp/
+temp/
+cache/
+.cache/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ==============================================================================
+# 🧪 TESTING AND ANALYSIS
+# ==============================================================================
+# Test outputs
+test_results/
+test_reports/
+test_coverage/
+integration_test_reports/
+
+# Performance profiling
+*.profile
+*.trace
+observatory_boilerplate.js
+
+# ==============================================================================
+# 📦 DEPENDENCIES AND PACKAGES
+# ==============================================================================
+# Node.js (if using web components)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (if using Python tools)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ==============================================================================
+# 🚀 DEPLOYMENT AND DISTRIBUTION
+# ==============================================================================
+# Build outputs
+dist/
+release/
+deploy/
+*.app
+*.dmg
+*.exe
+*.msi
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+*.aar
+*.apk
+*.aab
+*.ipa
+
+# Web build
+web/build/
+web/dist/
+
+# ==============================================================================
+# 🔧 DEVELOPMENT TOOLS
+# ==============================================================================
+# Documentation generation
+doc/api/
+.dartdoc/
+
+# Internationalization
+*.arb.json
+
+# Asset generation
+assets/generated/
+
+# ==============================================================================
+# 🎮 MCP SERVER SPECIFIC
+# ==============================================================================
+# MCP server logs and data
+mcp_logs/
+mcp_cache/
+puppeteer_downloads/
+.puppeteer/
+
+# Chrome/Chromium data for puppeteer
+chrome_data/
+chromium_data/
+
+# ==============================================================================
+# 💾 BACKUP AND ARCHIVE FILES
+# ==============================================================================
+# Compressed files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*.swp
+*.tmp
+
+# ==============================================================================
+# 🎯 PROJECT-SPECIFIC EXCLUSIONS
+# ==============================================================================
+# Keep essential config files but ignore sensitive data
+!config/mcp_servers.json
+config/local_*
+config/dev_*
+config/prod_*
+
+# Keep example files but ignore generated outputs
+!example/
+example/outputs/
+example/generated/
+
+# Keep documentation but ignore generated docs
+!docs/
+docs/generated/
+docs/build/
+
+# Keep tools but ignore tool outputs
+!tools/
+tools/output/
+tools/temp/
+test_inputs/
+test/*.txt

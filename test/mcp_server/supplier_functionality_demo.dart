@@ -12,11 +12,18 @@ void main() async {
     final content = supplierFile.readAsStringSync();
     final suppliers = jsonDecode(content) as List<dynamic>;
     print('✅ Current supplier list has ${suppliers.length} entries');
-    
+
     // Show first few suppliers
     final firstFew = suppliers.take(3).toList();
     for (final supplier in firstFew) {
-      print('   • ${supplier['name']}: ${supplier['category']}');
+      final supplierMap = supplier as Map<String, dynamic>;
+      final accountInfo = supplierMap.containsKey('account') &&
+              supplierMap['account'] != null &&
+              (supplierMap['account'] as String).isNotEmpty
+          ? ' (Account: ${supplierMap['account']})'
+          : '';
+      print(
+          '   • ${supplierMap['name']}: ${supplierMap['supplies']}$accountInfo');
     }
   } else {
     print('❌ Supplier list file not found');
@@ -24,29 +31,43 @@ void main() async {
 
   // Test 2: Test fuzzy matching logic
   print('\n🔍 Test 2: Testing fuzzy matching logic...');
-  
+
   // Simulate the fuzzy matching function
   final testCases = [
-    {'input': 'Sp Github Payment', 'existing': 'Github, Inc.', 'shouldMatch': true},
-    {'input': 'Visa Purchase Cursor', 'existing': 'Cursor, Ai Powered', 'shouldMatch': true},
+    {
+      'input': 'Sp Github Payment',
+      'existing': 'Github, Inc.',
+      'shouldMatch': true
+    },
+    {
+      'input': 'Visa Purchase Cursor',
+      'existing': 'Cursor, Ai Powered',
+      'shouldMatch': true
+    },
     {'input': 'Paypal Stripe', 'existing': 'Stripe', 'shouldMatch': true},
     {'input': 'Amazon', 'existing': 'Amazon Web Services', 'shouldMatch': true},
-    {'input': 'Completely Different', 'existing': 'Nothing Similar', 'shouldMatch': false},
+    {
+      'input': 'Completely Different',
+      'existing': 'Nothing Similar',
+      'shouldMatch': false
+    },
   ];
 
   for (final testCase in testCases) {
     final input = testCase['input'] as String;
     final existing = testCase['existing'] as String;
     final shouldMatch = testCase['shouldMatch'] as bool;
-    
+
     // Simple fuzzy match test
-    final normalized1 = input.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '').trim();
-    final normalized2 = existing.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '').trim();
-    
-    final matches = normalized1.contains(normalized2.split(' ').first) || 
-                   normalized2.contains(normalized1.split(' ').last) ||
-                   normalized1 == normalized2;
-    
+    final normalized1 =
+        input.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '').trim();
+    final normalized2 =
+        existing.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '').trim();
+
+    final matches = normalized1.contains(normalized2.split(' ').first) ||
+        normalized2.contains(normalized1.split(' ').last) ||
+        normalized1 == normalized2;
+
     final result = matches ? '✅' : '❌';
     final expected = shouldMatch ? 'should match' : 'should not match';
     print('   $result "$input" vs "$existing" ($expected)');
@@ -69,7 +90,7 @@ void main() async {
   print('\n🏷️  Test 4: Testing category suggestions...');
   final categoryExamples = [
     'Software Development Tools',
-    'Marketing & Advertising', 
+    'Marketing & Advertising',
     'Cloud Infrastructure Services',
     'Office Supplies',
     'Vehicle Expenses',
@@ -83,7 +104,8 @@ void main() async {
   }
 
   print('\n🏆 Supplier Management functionality test completed!');
-  print('📁 The MCP server is ready to manage supplier information in inputs/supplier_list.json');
+  print(
+      '📁 The MCP server is ready to manage supplier information in inputs/supplier_list.json');
   print('🔧 Features available:');
   print('   • Add new suppliers with business categories');
   print('   • Update existing supplier categories');

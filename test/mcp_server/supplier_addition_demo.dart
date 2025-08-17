@@ -6,7 +6,7 @@ void main() async {
   print('🧪 Testing Add New Supplier...');
 
   final supplierFile = File('inputs/supplier_list.json');
-  
+
   // Read current count
   int originalCount = 0;
   if (supplierFile.existsSync()) {
@@ -19,7 +19,7 @@ void main() async {
   // Simulate adding a new supplier (as the MCP server would)
   try {
     List<Map<String, dynamic>> suppliers = [];
-    
+
     if (supplierFile.existsSync()) {
       final jsonString = supplierFile.readAsStringSync();
       if (jsonString.isNotEmpty) {
@@ -31,13 +31,15 @@ void main() async {
     // Test data
     final newSupplier = {
       'name': 'OpenAI API Services',
-      'category': 'Software Development Tools',
+      'supplies': 'AI API services and software development tools',
+      'account': '401',
     };
 
     // Check if supplier already exists
     bool exists = false;
     for (final supplier in suppliers) {
-      if ((supplier['name'] as String).toLowerCase() == newSupplier['name']!.toLowerCase()) {
+      if ((supplier['name'] as String).toLowerCase() ==
+          newSupplier['name']!.toLowerCase()) {
         exists = true;
         break;
       }
@@ -46,18 +48,20 @@ void main() async {
     if (!exists) {
       // Add new supplier
       suppliers.add(newSupplier);
-      
+
       // Sort alphabetically
-      suppliers.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
-      
+      suppliers
+          .sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+
       // Save with pretty formatting
       const encoder = JsonEncoder.withIndent('  ');
       final prettyJsonString = encoder.convert(suppliers);
       supplierFile.writeAsStringSync(prettyJsonString);
-      
-      print('✅ Added new supplier: ${newSupplier['name']} (${newSupplier['category']})');
+
+      print(
+          '✅ Added new supplier: ${newSupplier['name']} (${newSupplier['supplies']}${newSupplier.containsKey('account') ? ', Account: ${newSupplier['account']}' : ''})');
       print('✅ New supplier count: ${suppliers.length}');
-      
+
       // Verify it was added correctly
       final verifyContent = supplierFile.readAsStringSync();
       if (verifyContent.contains(newSupplier['name']!)) {
@@ -68,7 +72,6 @@ void main() async {
     } else {
       print('ℹ️  Supplier already exists: ${newSupplier['name']}');
     }
-
   } catch (e) {
     print('❌ Error adding supplier: $e');
   }

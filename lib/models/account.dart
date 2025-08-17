@@ -15,6 +15,9 @@ enum GstType {
   /// GST Free Expenses - Applies to expense accounts exempt from GST.
   gstFreeExpenses('GST Free Expenses'),
 
+  /// GST Free Income - Applies to income accounts exempt from GST.
+  gstFreeIncome('GST Free Income'),
+
   /// BAS Excluded - Applies to accounts that are excluded from Business Activity Statement.
   basExcluded('BAS Excluded'),
 

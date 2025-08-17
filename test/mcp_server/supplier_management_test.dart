@@ -99,43 +99,55 @@ void main() {
     test('📝 Supplier data structure validation', () {
       final validSupplier = {
         'name': 'Test Supplier Co.',
-        'category': 'Software Development Tools',
+        'supplies': 'Software development tools and services',
+      };
+
+      final validSupplierWithAccount = {
+        'name': 'Test Supplier Co.',
+        'supplies': 'Software development tools and services',
+        'account': '401',
       };
 
       final invalidSuppliers = [
-        {'name': 'Test'}, // Missing category
-        {'category': 'Test'}, // Missing name
-        {'name': '', 'category': 'Test'}, // Empty name
-        {'name': 'Test', 'category': ''}, // Empty category
+        {'name': 'Test'}, // Missing supplies
+        {'supplies': 'Test'}, // Missing name
+        {'name': '', 'supplies': 'Test'}, // Empty name
+        {'name': 'Test', 'supplies': ''}, // Empty supplies
+        {
+          'name': 'Test',
+          'supplies': 'Valid',
+          'account': ''
+        }, // Empty account when provided
       ];
 
       expect(_isValidSupplierData(validSupplier), isTrue);
+      expect(_isValidSupplierData(validSupplierWithAccount), isTrue);
 
       for (final invalid in invalidSuppliers) {
         expect(_isValidSupplierData(invalid), isFalse);
       }
     });
 
-    test('🏷️ Category standardization', () {
-      final standardCategories = [
-        'Software Development Tools',
-        'Marketing & Advertising',
-        'Cloud Infrastructure Services',
-        'Office Supplies',
-        'Vehicle Expenses',
-        'Staff Wages',
-        'Insurance - Business',
-        'Website & Online Fees',
-        'Utilities - Distillery',
-        'Fermentables Purchases',
-        'Labels & Printing',
-        'Bottles & Packaging',
+    test('🏷️ Supplies description validation', () {
+      final validSupplies = [
+        'Software development tools and services',
+        'Marketing and advertising services',
+        'Cloud computing and infrastructure services',
+        'Office supplies and stationery',
+        'Vehicle maintenance and fuel services',
+        'Staff wages and employment services',
+        'Business insurance services',
+        'Web hosting and domain services',
+        'Electricity and utility services',
+        'Fermentation ingredients and supplies',
+        'Product labels and printing services',
+        'Bottles and packaging materials',
       ];
 
-      for (final category in standardCategories) {
-        expect(category, isNotEmpty);
-        expect(category, isNot(equals(category.toLowerCase())));
-        expect(category, isNot(equals(category.toUpperCase())));
+      for (final supplies in validSupplies) {
+        expect(supplies, isNotEmpty);
+        expect(supplies, isNot(startsWith(' ')));
+        expect(supplies, isNot(endsWith(' ')));
       }
     });
 
@@ -145,15 +157,20 @@ void main() {
         expect(content, isNotEmpty);
 
         final suppliers = jsonDecode(content) as List<dynamic>;
-        expect(suppliers, isA<List>());
+        expect(suppliers, isA<List<dynamic>>());
 
         // Check each supplier has required fields
         for (final supplier in suppliers) {
-          expect(supplier, isA<Map>());
+          expect(supplier, isA<Map<String, dynamic>>());
           expect(supplier['name'], isA<String>());
-          expect(supplier['category'], isA<String>());
+          expect(supplier['supplies'], isA<String>());
           expect(supplier['name'], isNotEmpty);
-          expect(supplier['category'], isNotEmpty);
+          expect(supplier['supplies'], isNotEmpty);
+          // Account is optional
+          if (supplier.containsKey('account') == true) {
+            expect(supplier['account'], isA<String>());
+            expect(supplier['account'], isNotEmpty);
+          }
         }
 
         // Check alphabetical sorting
@@ -217,7 +234,7 @@ void main() {
       // Test special characters in names
       final specialCharSupplier = {
         'name': 'Test & Co. (Pty) Ltd.',
-        'category': 'Professional Services'
+        'supplies': 'Professional services and consulting'
       };
       expect(_isValidSupplierData(specialCharSupplier), isTrue);
     });
@@ -329,10 +346,19 @@ List<String> _getSupplierVariations(String normalizedName) {
 
 /// Validate supplier data structure
 bool _isValidSupplierData(Map<String, dynamic> supplier) {
-  return supplier.containsKey('name') &&
-      supplier.containsKey('category') &&
+  final hasRequiredFields = supplier.containsKey('name') &&
+      supplier.containsKey('supplies') &&
       supplier['name'] is String &&
-      supplier['category'] is String &&
+      supplier['supplies'] is String &&
       (supplier['name'] as String).isNotEmpty &&
-      (supplier['category'] as String).isNotEmpty;
+      (supplier['supplies'] as String).isNotEmpty;
+
+  // Check optional account field if present
+  if (supplier.containsKey('account')) {
+    return hasRequiredFields &&
+        supplier['account'] is String &&
+        (supplier['account'] as String).isNotEmpty;
+  }
+
+  return hasRequiredFields;
 }

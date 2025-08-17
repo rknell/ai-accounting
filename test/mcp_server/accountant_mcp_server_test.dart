@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:test/test.dart';
+
 import 'package:ai_accounting/models/account.dart';
+import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/services/services.dart';
+import 'package:test/test.dart';
 
 /// 🏆 COMPREHENSIVE MCP SERVER TEST SUITE [+1000 XP]
 ///
@@ -21,7 +23,8 @@ void main() {
     late Services services;
 
     setUpAll(() {
-      services = Services();
+      // 🛡️ FORTRESS PROTECTION: Use test mode to prevent file operations
+      services = Services(testMode: true);
       print('🚀 Initializing MCP Server Test Suite...');
     });
 
@@ -173,12 +176,6 @@ void main() {
     });
 
     group('📋 Accounting Rules Management', () {
-      late File rulesFile;
-
-      setUp(() {
-        rulesFile = File('inputs/accounting_rules.txt');
-      });
-
       test('📝 FEATURE: Accounting rules file creation', () {
         // Test rule format
         final testRule = '''
@@ -218,7 +215,7 @@ Notes: This is a test rule for the test suite
           final success = services.generalJournal.loadEntries();
           if (success) {
             final entries = services.generalJournal.getAllEntries();
-            expect(entries, isA<List>());
+            expect(entries, isA<List<GeneralJournal>>());
             print('   ✅ Loaded ${entries.length} journal entries');
           } else {
             print('   ⚠️  Journal loading returned false (may be expected)');
@@ -361,7 +358,6 @@ Notes: This is a test rule for the test suite
 
       test('🔍 EDGE_CASE: Date range edge cases', () {
         final futureDate = DateTime.now().add(const Duration(days: 365));
-        final pastDate = DateTime.now().subtract(const Duration(days: 365));
 
         final futureEntries = services.generalJournal
             .getEntriesByDateRange(futureDate, futureDate);
@@ -376,17 +372,26 @@ Notes: This is a test rule for the test suite
 /// Generate test transaction ID
 String generateTestTransactionId(
     DateTime date, String description, double amount, String bankCode) {
-  return '${date.toIso8601String().split('T')[0]}_${description}_${amount}_${bankCode}';
+  return '${date.toIso8601String().split('T')[0]}_${description}_${amount}_$bankCode';
 }
 
 /// Validate supplier data structure
 bool isValidSupplierData(Map<String, dynamic> supplier) {
-  return supplier.containsKey('name') &&
-      supplier.containsKey('category') &&
+  final hasRequiredFields = supplier.containsKey('name') &&
+      supplier.containsKey('supplies') &&
       supplier['name'] is String &&
-      supplier['category'] is String &&
+      supplier['supplies'] is String &&
       (supplier['name'] as String).isNotEmpty &&
-      (supplier['category'] as String).isNotEmpty;
+      (supplier['supplies'] as String).isNotEmpty;
+
+  // Check optional account field if present
+  if (supplier.containsKey('account')) {
+    return hasRequiredFields &&
+        supplier['account'] is String &&
+        (supplier['account'] as String).isNotEmpty;
+  }
+
+  return hasRequiredFields;
 }
 
 /// Validate account code format

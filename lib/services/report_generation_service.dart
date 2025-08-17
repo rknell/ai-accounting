@@ -13,7 +13,7 @@ class ReportGenerationService {
   /// Creates a new ReportGenerationService with the provided services
   ReportGenerationService(this.services);
 
-  /// Generates all financial reports for the previous financial quarter
+  /// Generates financial reports for the previous quarter only
   ///
   /// This includes:
   /// - Profit and Loss Report
@@ -25,8 +25,8 @@ class ReportGenerationService {
   ///
   /// Reports are generated for the previous financial quarter based on current date.
   /// Financial quarters are: Q1 (Jan-Mar), Q2 (Apr-Jun), Q3 (Jul-Sep), Q4 (Oct-Dec)
-  void generateReports() {
-    print('📊 Generating financial reports...');
+  void generatePreviousQuarterReports() {
+    print('📊 Generating financial reports for previous quarter...');
 
     final reportPeriod = _calculatePreviousQuarter();
     final quarterStart = reportPeriod['start'] as DateTime;
@@ -34,6 +34,14 @@ class ReportGenerationService {
 
     print(
         'Report period: ${quarterStart.toString().substring(0, 10)} to ${quarterEnd.toString().substring(0, 10)}');
+
+    // Check if there's any data for this quarter
+    final quarterEntries =
+        services.generalJournal.getEntriesByDateRange(quarterStart, quarterEnd);
+    if (quarterEntries.isEmpty) {
+      print('⚠️  No transaction data found for the previous quarter.');
+      return;
+    }
 
     // Generate profit and loss report
     services.reports.generateProfitAndLossReport(quarterStart, quarterEnd);
@@ -57,10 +65,158 @@ class ReportGenerationService {
     // Backup input files
     _backupInputFiles();
 
-    print('\n✅ Reports generated successfully!');
+    print('\n✅ Previous quarter reports generated successfully!');
     print('📁 Check the data/ directory for the generated HTML reports.');
     print(
         '🌐 Open data/report_viewer.html to view all reports in a navigable interface.');
+  }
+
+  /// Generates all financial reports for all quarters that have transaction data
+  ///
+  /// This includes:
+  /// - Profit and Loss Report
+  /// - Balance Sheet
+  /// - GST Report
+  /// - General Journal Report
+  /// - Ledger Report
+  /// - Report Wrapper for navigation
+  ///
+  /// Reports are generated for all quarters that contain financial transactions.
+  /// Financial quarters are: Q1 (Jan-Mar), Q2 (Apr-Jun), Q3 (Jul-Sep), Q4 (Oct-Dec)
+  void generateReports() {
+    print('📊 Generating financial reports for all quarters with data...');
+
+    final quartersWithData = _findQuartersWithData();
+
+    if (quartersWithData.isEmpty) {
+      print('⚠️  No transaction data found. No reports to generate.');
+      return;
+    }
+
+    print('Found data for ${quartersWithData.length} quarters:');
+    for (final quarter in quartersWithData) {
+      final start = quarter['start'] as DateTime;
+      final end = quarter['end'] as DateTime;
+      print(
+          '  - ${start.toString().substring(0, 10)} to ${end.toString().substring(0, 10)}');
+    }
+
+    // Generate reports for each quarter with data
+    for (final quarter in quartersWithData) {
+      final quarterStart = quarter['start'] as DateTime;
+      final quarterEnd = quarter['end'] as DateTime;
+
+      print(
+          '\n📈 Generating reports for quarter: ${quarterStart.toString().substring(0, 10)} to ${quarterEnd.toString().substring(0, 10)}');
+
+      // Generate profit and loss report
+      services.reports.generateProfitAndLossReport(quarterStart, quarterEnd);
+
+      // Generate balance sheet (as of end of quarter)
+      services.reports.generateBalanceSheet(quarterEnd);
+
+      // Generate GST report
+      services.reports.generateGSTReport(quarterStart, quarterEnd);
+
+      // Generate general journal report
+      final journalReport = GeneralJournalReport(services);
+      journalReport.generate(quarterStart, quarterEnd);
+
+      // Generate ledger report
+      LedgerReport(services).generate(quarterStart, quarterEnd);
+    }
+
+    // Generate report wrapper for easy navigation
+    services.reports.generateReportWrapper();
+
+    // Backup input files
+    _backupInputFiles();
+
+    print(
+        '\n✅ Reports generated successfully for all ${quartersWithData.length} quarters!');
+    print('📁 Check the data/ directory for the generated HTML reports.');
+    print(
+        '🌐 Open data/report_viewer.html to view all reports in a navigable interface.');
+  }
+
+  /// Finds all quarters that contain transaction data
+  ///
+  /// Returns a list of maps with 'start' and 'end' DateTime objects representing
+  /// each quarter that contains financial transactions, sorted chronologically.
+  List<Map<String, DateTime>> _findQuartersWithData() {
+    final allEntries = services.generalJournal.getAllEntries();
+
+    if (allEntries.isEmpty) {
+      return [];
+    }
+
+    // Find the earliest and latest transaction dates
+    final sortedEntries = List<DateTime>.from(allEntries.map((e) => e.date))
+      ..sort();
+
+    final earliestDate = sortedEntries.first;
+    final latestDate = sortedEntries.last;
+
+    // Generate all quarters between earliest and latest dates
+    final quarters = <Map<String, DateTime>>[];
+
+    var currentYear = earliestDate.year;
+    var currentQuarter = ((earliestDate.month - 1) ~/ 3) + 1;
+
+    while (true) {
+      final quarterDates = _getQuarterDates(currentYear, currentQuarter);
+      final quarterStart = quarterDates['start']!;
+      final quarterEnd = quarterDates['end']!;
+
+      // Check if this quarter has any transactions
+      final quarterEntries = services.generalJournal
+          .getEntriesByDateRange(quarterStart, quarterEnd);
+
+      if (quarterEntries.isNotEmpty) {
+        quarters.add(quarterDates);
+      }
+
+      // Move to next quarter
+      currentQuarter++;
+      if (currentQuarter > 4) {
+        currentQuarter = 1;
+        currentYear++;
+      }
+
+      // Stop if we've passed the latest transaction date
+      if (quarterStart.isAfter(latestDate)) {
+        break;
+      }
+    }
+
+    return quarters;
+  }
+
+  /// Gets the start and end dates for a specific quarter and year
+  ///
+  /// Returns a map with 'start' and 'end' DateTime objects representing
+  /// the specified quarter period.
+  Map<String, DateTime> _getQuarterDates(int year, int quarter) {
+    final quarterStartMonth = (quarter - 1) * 3 + 1; // 1, 4, 7, or 10
+    final quarterEndMonth = quarterStartMonth + 2; // 3, 6, 9, or 12
+
+    // Start at beginning of first day (00:00:00)
+    final quarterStart = DateTime(year, quarterStartMonth, 1);
+
+    // End at end of last day (23:59:59)
+    final quarterEnd = DateTime(year, quarterEndMonth + 1, 1)
+        .subtract(const Duration(days: 1))
+        .copyWith(
+            hour: 23,
+            minute: 59,
+            second: 59,
+            millisecond: 999,
+            microsecond: 999);
+
+    return {
+      'start': quarterStart,
+      'end': quarterEnd,
+    };
   }
 
   /// Calculates the start and end dates for the previous financial quarter
@@ -79,27 +235,7 @@ class ReportGenerationService {
     // Determine the year for the previous quarter (previous year if we're in Q1)
     final quarterYear = currentQuarter > 1 ? now.year : now.year - 1;
 
-    // Calculate the start and end of the previous financial quarter
-    final quarterStartMonth = (previousQuarter - 1) * 3 + 1; // 1, 4, 7, or 10
-    final quarterEndMonth = quarterStartMonth + 2; // 3, 6, 9, or 12
-
-    // Start at beginning of first day (00:00:00)
-    final quarterStart = DateTime(quarterYear, quarterStartMonth, 1);
-
-    // End at end of last day (23:59:59)
-    final quarterEnd = DateTime(quarterYear, quarterEndMonth + 1, 1)
-        .subtract(const Duration(days: 1))
-        .copyWith(
-            hour: 23,
-            minute: 59,
-            second: 59,
-            millisecond: 999,
-            microsecond: 999);
-
-    return {
-      'start': quarterStart,
-      'end': quarterEnd,
-    };
+    return _getQuarterDates(quarterYear, previousQuarter);
   }
 
   /// Backs up input files to the data/backup_inputs directory with date stamp

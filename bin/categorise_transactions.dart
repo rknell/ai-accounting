@@ -17,7 +17,7 @@ final chartOfAccountsPath = path.join(inputsDir.path, "accounts.json");
 final companyProfilePath = path.join(inputsDir.path, 'company_profile.txt');
 final accountingRulesPath = path.join(inputsDir.path, 'accounting_rules.txt');
 
-// UNCATEGORIZED ACCOUNT CODE - All new transactions start here
+// UNCATEGORIZED ACCOUNT CODE - All new transactions startuncategor here
 const String uncategorizedAccountCode = '999';
 
 // --- SYSTEM PROMPT BUILDER ---
@@ -40,7 +40,10 @@ String buildSystemPrompt(
     - Match core business names (e.g., "Dtf Direct" matches "DTF Direct")
     - Match variations (e.g., "cursor" matches "Cursor, Ai Powered")
     
-    ONLY research suppliers that have NO MATCH in the existing supplier list.
+    You can use the read_supplier tool to check if a supplier exists with fuzzy matching.
+    The tool will return "found": true if a supplier exists, or "found": false with a suggestion to research.
+    
+    ONLY research suppliers when read_supplier returns "found": false.
     
     If a supplier is genuinely not in the known supplier list, follow this workflow:
     1. Use puppeteer_navigate to go to "https://duckduckgo.com/?q=[supplier name]"
@@ -48,6 +51,7 @@ String buildSystemPrompt(
     3. Analyze the search results to understand what the supplier does and how it applies to the company.
     4. If the supplier name should be cleaned up given the search results, do so and continue to reference it with the cleaned up name.
     For example strip identifiers from the name such as numbers or locations, just keep the business name.
+    5. Use the create_supplier tool to add the new supplier with their cleaned name and what they supply.
 
     If something is increasing the bank account (cr) just consider it a sale.
 
@@ -66,20 +70,29 @@ String buildSystemPrompt(
     Chart of accounts (from $chartOfAccountsPath):
     $chartOfAccounts
     Assume all transactions are business expenses and try to find a likely justification for each one.
-    MANDATORY: Response must be in JSON format and only include the JSON object. Do not include any other text. Response format:
+    
+    MANDATORY: Response must be in JSON format and only include the JSON object. Do not include any other text. 
+    
+    Each input line contains a TransactionID at the end that you MUST extract and include in your response.
+    
+    Response format:
     [
       {
         "account": "501",
-        "supplierName": "7-Eleven",
-        "lineItem": "20/12/2024\tVisa Purchase 17Dec 7-Eleven 4210 Ormeau Ormeau\t130.48\t232939.4",
-        "justification": "The purchase of fuel"
+        "supplierName": "7-Eleven", 
+        "lineItem": "20/12/2024\tVisa Purchase 17Dec 7-Eleven 4210 Ormeau Ormeau\t130.48\t232939.4\tTransactionID:2024-12-20_Visa Purchase 17Dec 7-Eleven 4210 Ormeau Ormeau_130.48_001",
+        "justification": "The purchase of fuel",
+        "transactionId": "2024-12-20_Visa Purchase 17Dec 7-Eleven 4210 Ormeau Ormeau_130.48_001"
       }
     ]
+    
+    CRITICAL: Extract the transactionId from the TransactionID field in each input line and include it exactly in your response.
+    This will be used to update the transaction using the update_transaction_account tool.
   """;
 }
 
 Future<void> main() async {
-  print('🚀 Starting AI Accounting Workflow...');
+  print('🤖 Starting AI Transaction Categorization Workflow...');
 
   // === INITIALIZATION PHASE ===
   final apiKey = Platform.environment['DEEPSEEK_API_KEY'];
@@ -98,39 +111,9 @@ Future<void> main() async {
 
   final services = Services();
 
-  // === STEP 1: IMPORT ALL BANK STATEMENT CSV FILES ===
-  print('📊 Step 1: Importing bank statement CSV files...');
-  final bankImportFiles = services.bankStatement.loadBankImportFiles();
-  print('✅ Loaded ${bankImportFiles.length} bank import files');
-
-  // === STEP 2: ADD NEW TRANSACTIONS TO GENERAL JOURNAL WITH ACCOUNT 999 ===
-  print('💾 Step 2: Adding new transactions to general journal...');
-  int newTransactionsAdded = 0;
-
-  for (final bankFile in bankImportFiles) {
-    for (final row in bankFile.rawFileRows) {
-      // Set uncategorized account code for new transactions
-      if (row.accountCode.isEmpty) {
-        row.accountCode = uncategorizedAccountCode;
-        row.reason = 'Imported - needs categorization';
-      }
-
-      // Create journal entry from the row
-      final journalEntry = GeneralJournal.fromRawFileRow(row);
-
-      // Add to general journal (this will handle duplicate checking)
-      final wasAdded = services.generalJournal.addEntry(journalEntry);
-      if (wasAdded) {
-        newTransactionsAdded++;
-        print('  ➕ Added: ${row.description} (${row.accountCode})');
-      }
-    }
-  }
-
-  print('✅ Added $newTransactionsAdded new transactions to general journal');
-
-  // === STEP 3: CATEGORIZE UNCATEGORIZED TRANSACTIONS (ACCOUNT 999) ===
-  print('🤖 Step 3: AI categorization of uncategorized transactions...');
+  // === STEP 1: CATEGORIZE UNCATEGORIZED TRANSACTIONS (ACCOUNT 999) ===
+  print(
+      '🔍 Step 1: Loading uncategorized transactions for AI categorization...');
 
   // Find all journal entries with account 999 (uncategorized)
   final uncategorizedEntries = services.generalJournal.entries
@@ -139,20 +122,31 @@ Future<void> main() async {
           entry.credits.any((c) => c.accountCode == uncategorizedAccountCode))
       .toList();
 
-  print('🔍 Found ${uncategorizedEntries.length} uncategorized transactions');
+  print('🎯 Found ${uncategorizedEntries.length} uncategorized transactions');
 
   if (uncategorizedEntries.isNotEmpty) {
     // Convert journal entries back to statement lines for AI processing
     final uncategorizedRows = <Map<String, dynamic>>[];
 
     for (final entry in uncategorizedEntries) {
-      // Create a pseudo-row for AI processing
-      final statementLine =
-          '${entry.date.toIso8601String().substring(0, 10)}\t${entry.description}\t${entry.amount > 0 ? entry.amount.toString() : ''}\t${entry.amount < 0 ? (-entry.amount).toString() : ''}\t${entry.bankBalance}';
+      // Create transaction ID in the format expected by MCP tools
+      final transactionId =
+          '${entry.date.toIso8601String().substring(0, 10)}_${entry.description}_${entry.amount}_${entry.bankCode}';
+
+      // 🛡️ WARRIOR PRINCIPLE: All amounts are positive, debit/credit determines direction
+      // Determine if this is a debit or credit to the bank account based on transaction structure
+      final isBankDebit =
+          entry.debits.any((d) => d.accountCode == entry.bankCode);
+
+      // Create a pseudo-row for AI processing with transaction ID
+      final statementLine = isBankDebit
+          ? '${entry.date.toIso8601String().substring(0, 10)}\t${entry.description}\t${entry.amount}\t\t${entry.bankBalance}\tTransactionID:$transactionId'
+          : '${entry.date.toIso8601String().substring(0, 10)}\t${entry.description}\t\t${entry.amount}\t${entry.bankBalance}\tTransactionID:$transactionId';
 
       uncategorizedRows.add({
         'entry': entry,
         'statementLine': statementLine,
+        'transactionId': transactionId,
       });
     }
 
@@ -197,18 +191,13 @@ Future<void> main() async {
         systemPrompt: systemPrompt,
         allowedToolNames: {
           'puppeteer_navigate',
-          'read_file',
-          'read_text_file',
-          'write_file',
-          'edit_file',
-          'create_directory',
-          'list_directory',
-          'list_directory_with_sizes',
-          'directory_tree',
-          'move_file',
-          'search_files',
-          'get_file_info',
-          'list_allowed_directories',
+          // MCP Accountant tools for supplier management and transaction updates
+          'create_supplier',
+          'update_supplier',
+          'read_supplier',
+          'list_suppliers',
+          'update_transaction_account',
+          'search_transactions_by_account',
         },
       )..temperature = 0.3;
 
@@ -245,57 +234,76 @@ Future<void> main() async {
           final lineItem = item['lineItem'] as String?;
           final newAccount = item['account'] as String? ?? '';
           final justification = item['justification'] as String?;
+          final transactionId = item['transactionId'] as String?;
 
-          // Find matching entry in this batch
-          final match = batch.firstWhere(
-            (e) => e['statementLine'] == lineItem,
-            orElse: () => <String, dynamic>{},
-          );
-
-          if (match.isNotEmpty &&
+          if (transactionId != null &&
               newAccount.isNotEmpty &&
               newAccount != uncategorizedAccountCode) {
-            final originalEntry = match['entry'] as GeneralJournal;
+            try {
+              // Use MCP tool to update the transaction account
+              final toolCall = ToolCall(
+                id: 'update_${DateTime.now().millisecondsSinceEpoch}',
+                type: 'function',
+                function: ToolCallFunction(
+                  name: 'update_transaction_account',
+                  arguments: jsonEncode({
+                    'transactionId': transactionId,
+                    'newAccountCode': newAccount,
+                    'notes':
+                        justification ?? 'AI categorization: $justification',
+                  }),
+                ),
+              );
 
-            // Create updated entry with new account code
-            final updatedEntry = _updateEntryAccountCode(
-                originalEntry, newAccount, justification ?? '');
+              final updateResultString =
+                  await toolRegistry.executeTool(toolCall);
+              final updateResult = jsonDecode(updateResultString);
 
-            // Replace the original entry with the updated one
-            final wasUpdated = services.generalJournal
-                .updateEntry(originalEntry, updatedEntry);
-
-            if (wasUpdated) {
+              if (updateResult['success'] == true) {
+                print(
+                    '  ✅ Categorized via MCP: $transactionId -> Account $newAccount ($justification)');
+                categorizedCount++;
+              } else {
+                print(
+                    '  ⚠️  MCP update failed for $transactionId: ${updateResult['message'] ?? 'Unknown error'}');
+              }
+            } catch (e) {
               print(
-                  '  ✅ Categorized: ${originalEntry.description} -> Account $newAccount ($justification)');
-              categorizedCount++;
-            } else {
-              print(
-                  '  ⚠️  Failed to update entry: ${originalEntry.description}');
+                  '  ❌ Error updating transaction $transactionId via MCP: $e');
+
+              // Fallback to direct update if MCP fails
+              final match = batch.firstWhere(
+                (e) => e['statementLine'] == lineItem,
+                orElse: () => <String, dynamic>{},
+              );
+
+              if (match.isNotEmpty) {
+                final originalEntry = match['entry'] as GeneralJournal;
+                final updatedEntry = _updateEntryAccountCode(
+                    originalEntry, newAccount, justification ?? '');
+
+                final wasUpdated = services.generalJournal
+                    .updateEntry(originalEntry, updatedEntry);
+
+                if (wasUpdated) {
+                  print(
+                      '  ✅ Fallback categorized: ${originalEntry.description} -> Account $newAccount ($justification)');
+                  categorizedCount++;
+                } else {
+                  print(
+                      '  ⚠️  Failed to update entry: ${originalEntry.description}');
+                }
+              }
             }
-          } else if (match.isEmpty) {
-            print('  ⚠️  Could not match AI result to transaction: $item');
+          } else if (transactionId == null) {
+            print('  ⚠️  Missing transactionId in AI response: $item');
           }
         }
 
-        // Update supplier list after each batch
-        try {
-          final supplierUpdate = await agent.sendMessage(
-              """Please update ./inputs/supplier_list.json with any new suppliers you researched in this batch.
-              
-              IMPORTANT: Add suppliers using their CLEANED business names (not the raw transaction text).
-              For example:
-              - Transaction "Sp Dtf Direct" -> Add "DTF Direct" 
-              - Transaction "linkt" -> Add "Linkt Brisbane"
-              - Transaction "cursor" -> Add "Cursor, Ai Powered"
-              
-              This prevents future re-research of the same suppliers.""");
-          if (supplierUpdate.content?.isNotEmpty == true) {
-            print('  📝 Updated supplier list with cleaned names');
-          }
-        } catch (e) {
-          print('  ⚠️  Error updating supplier list: $e');
-        }
+        // Note: Supplier updates are now handled automatically via the create_supplier tool
+        // during the categorization process, so no additional supplier list update is needed.
+        print(
+            '  📝 Supplier list automatically updated via MCP tools during categorization');
       } catch (e, s) {
         print('❌ Error processing batch $batchNumber: $e');
         if (s.toString().isNotEmpty) {
@@ -307,16 +315,18 @@ Future<void> main() async {
     print(
         '✅ Categorization complete: $categorizedCount transactions processed');
   } else {
-    print('✅ No uncategorized transactions found');
+    print(
+        '✨ No uncategorized transactions found - all transactions are already categorized!');
   }
 
-  // === STEP 4: GENERATE REPORTS ===
-  print('📊 Step 4: Generating financial reports...');
-  services.reportGeneration.generateReports();
-
-  print('🏆 AI Accounting Workflow Complete!');
-  print('📈 Check the data/ directory for generated reports');
-  print('🌐 Open data/report_viewer.html to view all reports');
+  print('🏆 AI Transaction Categorization Complete!');
+  print('💡 NEXT STEPS:');
+  print(
+      '  📊 Run "dart run bin/generate_reports.dart" to generate financial reports');
+  print(
+      '  📥 Run "dart run bin/import_transactions.dart" to import new CSV files');
+  print(
+      '  🗑️  Run "dart run bin/cleanup_uncategorized.dart" to clean up bad imports');
 
   await toolRegistry.shutdown();
   await client.close();

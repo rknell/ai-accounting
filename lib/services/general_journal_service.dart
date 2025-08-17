@@ -16,9 +16,14 @@ class GeneralJournalService {
   /// Flag indicating if data has been loaded
   bool _isLoaded = false;
 
+  /// 🛡️ TEST MODE: Prevents file operations when true
+  final bool _testMode;
+
   /// Default constructor
-  GeneralJournalService() {
-    loadEntries();
+  GeneralJournalService({bool testMode = false}) : _testMode = testMode {
+    if (!_testMode) {
+      loadEntries();
+    }
   }
 
   /// Loads general journal entries from the JSON file
@@ -63,6 +68,12 @@ class GeneralJournalService {
   ///
   /// Returns true if successful, false otherwise
   bool saveEntries() {
+    // 🛡️ FORTRESS PROTECTION: Never save in test mode
+    if (_testMode) {
+      print('🛡️ TEST MODE: Skipping file save operation');
+      return true;
+    }
+
     try {
       final file = File('data/general_journal.json');
       // Sort entries in ascending date order before saving
@@ -222,20 +233,30 @@ class GeneralJournalService {
     }
   }
 
-  /// Adds a new general journal entry
+  /// 🛡️ ELITE DUPLICATE PREVENTION: Adds a new general journal entry with bulletproof duplicate detection
   ///
-  /// Returns true if successful, false otherwise
+  /// **DUPLICATE DETECTION LOGIC:**
+  /// - Matches on bank account, date, exact description (bank line), and amount ONLY
+  /// - Ignores account codes (they change during categorization)
+  /// - Respects maximum count for identical transactions on same date
+  ///
+  /// **VICTORY CONDITIONS:**
+  /// - First transaction for bank account → Creates opening balance
+  /// - Transaction count in bank statement > journal count → Import allowed
+  /// - Otherwise → Duplicate prevented (FORTRESS PROTECTION)
+  ///
+  /// @param entry The journal entry to add
+  /// @return True if successfully added, false if duplicate prevented
   bool addEntry(GeneralJournal entry) {
     if (isFirstTransaction(entry)) {
       createOpeningBalance(entry);
     }
 
-    // Check if this entry already exists in the journal
-    // Only add the entry if the number of identical entries in the bank statement
-    // is greater than the number of identical entries in the general journal by at least 1
+    // 🔍 COUNT IDENTICAL BANK TRANSACTIONS (ignoring account codes)
+    // This ensures categorized transactions are properly recognized as duplicates
     int identicalEntriesInJournal = 0;
     for (final existingEntry in entries) {
-      if (existingEntry == entry) {
+      if (existingEntry.isSameBankTransaction(entry)) {
         identicalEntriesInJournal++;
       }
     }
@@ -244,14 +265,14 @@ class GeneralJournalService {
     int identicalEntriesInBankStatement =
         services.bankStatement.countIdenticalEntries(entry);
 
-    // Only add the entry if there are more occurrences in the bank statement than in the journal
+    // 🛡️ DUPLICATE PREVENTION: Only add if bank statement has more occurrences than journal
     if (identicalEntriesInBankStatement > identicalEntriesInJournal) {
       entries.add(entry);
+      return saveEntries();
     } else {
+      // 🚫 DUPLICATE DETECTED: Transaction already imported (possibly categorized)
       return false;
     }
-
-    return saveEntries();
   }
 
   /// Creates a general journal entry from a bank import row, handling GST splitting if needed
@@ -317,6 +338,21 @@ class GeneralJournalService {
   int countIdenticalEntries(GeneralJournal entry) {
     final matches =
         entries.where((existingEntry) => existingEntry == entry).toList();
+    return matches.length;
+  }
+
+  /// 🛡️ DUPLICATE DETECTION: Counts bank transactions that match core attributes
+  ///
+  /// This method counts entries that represent the same bank transaction,
+  /// ignoring account codes (which change during categorization).
+  /// Used for bulletproof duplicate prevention.
+  ///
+  /// @param entry The journal entry to compare against existing entries
+  /// @return The count of identical bank transactions found in the journal
+  int countIdenticalBankTransactions(GeneralJournal entry) {
+    final matches = entries
+        .where((existingEntry) => existingEntry.isSameBankTransaction(entry))
+        .toList();
     return matches.length;
   }
 

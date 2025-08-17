@@ -12,6 +12,12 @@ import 'package:get_it/get_it.dart';
 /// making it easier to access services from anywhere in the codebase without
 /// directly depending on GetIt throughout the application.
 class Services {
+  /// 🛡️ TEST MODE: Prevents file operations when true
+  final bool _testMode;
+
+  /// Constructor with optional test mode
+  Services({bool testMode = false}) : _testMode = testMode;
+
   /// Private instance of the ChartOfAccountsService
   ChartOfAccountsService? _chartOfAccounts;
 
@@ -43,7 +49,7 @@ class Services {
   /// Handles the creation, storage, and retrieval of general journal entries
   /// for accounting operations. Lazily instantiated when first accessed.
   GeneralJournalService get generalJournal {
-    return _generalJournal ??= GeneralJournalService();
+    return _generalJournal ??= GeneralJournalService(testMode: _testMode);
   }
 
   /// Instance of the BankStatementService

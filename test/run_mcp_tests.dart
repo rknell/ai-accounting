@@ -126,7 +126,7 @@ Future<bool> _runTestFile(String testFile) async {
 /// Generate comprehensive test report
 Future<void> _generateTestReport(
     Map<String, bool> results, int elapsedMs) async {
-  print('\n' + '=' * 60);
+  print('\n${'=' * 60}');
   print('🏆 MCP SERVER TEST SUITE REPORT');
   print('=' * 60);
 

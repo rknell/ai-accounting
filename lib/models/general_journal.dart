@@ -188,6 +188,12 @@ class GeneralJournal {
   @override
   int get hashCode {
     // Create a hash based on the unique properties of the journal entry
+    // Including account codes to match the updated equality implementation
+    var debitCodesHash =
+        Object.hashAll(debits.map((d) => Object.hash(d.accountCode, d.amount)));
+    var creditCodesHash = Object.hashAll(
+        credits.map((c) => Object.hash(c.accountCode, c.amount)));
+
     return Object.hash(
       date.day,
       date.month,
@@ -195,7 +201,33 @@ class GeneralJournal {
       description,
       amount,
       bankCode,
+      debitCodesHash,
+      creditCodesHash,
     );
+  }
+
+  /// 🛡️ DUPLICATE DETECTION: Checks if this transaction represents the same bank transaction
+  ///
+  /// This method determines if two transactions are duplicates based on ONLY the core
+  /// bank transaction attributes, ignoring account codes (which change during categorization).
+  /// 
+  /// **MATCHING CRITERIA:**
+  /// - Bank account code (0-99 range, e.g., 001, 002, 003, 050)
+  /// - Transaction date (same day)
+  /// - Transaction description (exact bank line string)
+  /// - Transaction amount (exact amount)
+  ///
+  /// **IGNORES:** Account codes in debits/credits (these change during categorization)
+  ///
+  /// @param other The journal entry to compare against
+  /// @return True if this represents the same bank transaction, false otherwise
+  bool isSameBankTransaction(GeneralJournal other) {
+    return amount == other.amount &&
+        date.year == other.date.year &&
+        date.month == other.date.month &&
+        date.day == other.date.day &&
+        description == other.description &&
+        bankCode == other.bankCode;
   }
 
   @override
@@ -205,12 +237,38 @@ class GeneralJournal {
     if (other is! GeneralJournal) return false;
 
     // Consider an entry to be equal if it matches the amount, the date,
-    // the description, and the bank account
-    return amount == other.amount &&
-        date.year == other.date.year &&
-        date.month == other.date.month &&
-        date.day == other.date.day &&
-        description == other.description &&
-        (bankCode == other.bankCode);
+    // the description, the bank account, and the account codes in debits/credits
+    if (amount != other.amount ||
+        date.year != other.date.year ||
+        date.month != other.date.month ||
+        date.day != other.date.day ||
+        description != other.description ||
+        bankCode != other.bankCode) {
+      return false;
+    }
+
+    // Compare debit and credit account codes to distinguish duplicate transactions
+    if (debits.length != other.debits.length ||
+        credits.length != other.credits.length) {
+      return false;
+    }
+
+    // Check if all debit account codes match
+    for (int i = 0; i < debits.length; i++) {
+      if (debits[i].accountCode != other.debits[i].accountCode ||
+          debits[i].amount != other.debits[i].amount) {
+        return false;
+      }
+    }
+
+    // Check if all credit account codes match
+    for (int i = 0; i < credits.length; i++) {
+      if (credits[i].accountCode != other.credits[i].accountCode ||
+          credits[i].amount != other.credits[i].amount) {
+        return false;
+      }
+    }
+
+    return true;
   }
 }

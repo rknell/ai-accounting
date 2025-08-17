@@ -20,17 +20,27 @@ class GSTReport extends BaseReport {
       final chartOfAccounts = services.chartOfAccounts;
       final environment = services.environment;
 
-      // Get all GST applicable income and expense accounts
-      final incomeAccounts = chartOfAccounts
+      // Get all income accounts (GST on Income and GST Free Income)
+      final gstOnIncomeAccounts = chartOfAccounts
           .getAccountsByType(AccountType.revenue)
-          .where((account) =>
-              account.gst && account.gstType == GstType.gstOnIncome)
+          .where((account) => account.gstType == GstType.gstOnIncome)
+          .toList();
+      
+      final gstFreeIncomeAccounts = chartOfAccounts
+          .getAllAccounts()
+          .where((account) => account.gstType == GstType.gstFreeIncome)
           .toList();
 
-      final expenseAccounts = chartOfAccounts
-          .getAccountsByType(AccountType.expense)
-          .where((account) =>
-              account.gst && account.gstType == GstType.gstOnExpenses)
+      // Get all expense accounts (GST on Expenses and GST Free Expenses)
+      // This includes both COGS and Expense account types
+      final gstOnExpenseAccounts = chartOfAccounts
+          .getAllAccounts()
+          .where((account) => account.gstType == GstType.gstOnExpenses)
+          .toList();
+          
+      final gstFreeExpenseAccounts = chartOfAccounts
+          .getAllAccounts()
+          .where((account) => account.gstType == GstType.gstFreeExpenses)
           .toList();
 
       // Get the GST clearing account
@@ -38,13 +48,18 @@ class GSTReport extends BaseReport {
           chartOfAccounts.getAccount(environment.gstClearingAccountCode);
 
       // Calculate totals for each account within the date range
-      final incomeTotals = <String, double>{};
-      final expenseTotals = <String, double>{};
+      final gstOnIncomeTotals = <String, double>{};
+      final gstFreeIncomeTotals = <String, double>{};
+      final gstOnExpenseTotals = <String, double>{};
+      final gstFreeExpenseTotals = <String, double>{};
+      
       double totalGstExclusiveIncome = 0;
+      double totalGstFreeIncome = 0;
       double totalGstExclusiveExpenses = 0;
+      double totalGstFreeExpenses = 0;
 
-      // Process income accounts
-      for (final account in incomeAccounts) {
+      // Process GST on Income accounts
+      for (final account in gstOnIncomeAccounts) {
         final entries = generalJournalService.getEntriesByAccount(account.code);
         final filteredEntries = entries
             .where((entry) =>
@@ -61,13 +76,59 @@ class GSTReport extends BaseReport {
         }
 
         if (accountTotal != 0) {
-          incomeTotals[account.code] = accountTotal;
+          gstOnIncomeTotals[account.code] = accountTotal;
           totalGstExclusiveIncome += accountTotal;
         }
       }
 
-      // Process expense accounts
-      for (final account in expenseAccounts) {
+      // Process GST Free Income accounts
+      for (final account in gstFreeIncomeAccounts) {
+        final entries = generalJournalService.getEntriesByAccount(account.code);
+        final filteredEntries = entries
+            .where((entry) =>
+                entry.date
+                    .isAfter(startDate.subtract(const Duration(days: 1))) &&
+                entry.date.isBefore(endDate.add(const Duration(days: 1))))
+            .toList();
+
+        double accountTotal = 0;
+        for (final entry in filteredEntries) {
+          // For income accounts, credit increases (positive) and debit decreases (negative)
+          accountTotal += getTransactionAmountForAccount(entry, account.code,
+              isPositive: true);
+        }
+
+        if (accountTotal != 0) {
+          gstFreeIncomeTotals[account.code] = accountTotal;
+          totalGstFreeIncome += accountTotal;
+        }
+      }
+
+      // Process GST on Expense accounts (includes COGS and regular expenses)
+      for (final account in gstOnExpenseAccounts) {
+        final entries = generalJournalService.getEntriesByAccount(account.code);
+        final filteredEntries = entries
+            .where((entry) =>
+                entry.date
+                    .isAfter(startDate.subtract(const Duration(days: 1))) &&
+                entry.date.isBefore(endDate.add(const Duration(days: 1))))
+            .toList();
+
+        double accountTotal = 0;
+        for (final entry in filteredEntries) {
+          // For expense/COGS accounts, debit increases (positive) and credit decreases (negative)
+          accountTotal += getTransactionAmountForAccount(entry, account.code,
+              isPositive: false);
+        }
+
+        if (accountTotal != 0) {
+          gstOnExpenseTotals[account.code] = accountTotal;
+          totalGstExclusiveExpenses += accountTotal;
+        }
+      }
+
+      // Process GST Free Expense accounts
+      for (final account in gstFreeExpenseAccounts) {
         final entries = generalJournalService.getEntriesByAccount(account.code);
         final filteredEntries = entries
             .where((entry) =>
@@ -84,8 +145,8 @@ class GSTReport extends BaseReport {
         }
 
         if (accountTotal != 0) {
-          expenseTotals[account.code] = accountTotal;
-          totalGstExclusiveExpenses += accountTotal;
+          gstFreeExpenseTotals[account.code] = accountTotal;
+          totalGstFreeExpenses += accountTotal;
         }
       }
 
@@ -132,10 +193,14 @@ class GSTReport extends BaseReport {
       final html = _generateHtml(
           startDate,
           endDate,
-          incomeTotals,
-          expenseTotals,
+          gstOnIncomeTotals,
+          gstFreeIncomeTotals,
+          gstOnExpenseTotals,
+          gstFreeExpenseTotals,
           totalGstExclusiveIncome,
+          totalGstFreeIncome,
           totalGstExclusiveExpenses,
+          totalGstFreeExpenses,
           gstOnSales,
           gstOnExpenses,
           netGST,
@@ -155,10 +220,14 @@ class GSTReport extends BaseReport {
   String _generateHtml(
       DateTime startDate,
       DateTime endDate,
-      Map<String, double> incomeTotals,
-      Map<String, double> expenseTotals,
+      Map<String, double> gstOnIncomeTotals,
+      Map<String, double> gstFreeIncomeTotals,
+      Map<String, double> gstOnExpenseTotals,
+      Map<String, double> gstFreeExpenseTotals,
       double totalGstExclusiveIncome,
+      double totalGstFreeIncome,
       double totalGstExclusiveExpenses,
+      double totalGstFreeExpenses,
       double gstOnSales,
       double gstOnExpenses,
       double netGST,
@@ -195,7 +264,7 @@ $commonScripts
                 </tr>
             </thead>
             <tbody>
-                ${_generateIncomeRows(incomeTotals, chartOfAccounts, startDate, endDate)}
+                ${_generateAccountRows(gstOnIncomeTotals, chartOfAccounts, startDate, endDate, isPositive: true)}
                 <tr class="total-row">
                     <td>Total GST Exclusive Sales:</td>
                     <td class="amount positive key-figure">${formatCurrency(totalGstExclusiveIncome)}</td>
@@ -213,6 +282,25 @@ $commonScripts
     </div>
 
     <div class="section">
+        <div class="section-title">GST Free Income</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th class="amount-column">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${_generateAccountRows(gstFreeIncomeTotals, chartOfAccounts, startDate, endDate, isPositive: true)}
+                <tr class="total-row">
+                    <td>Total GST Free Income:</td>
+                    <td class="amount positive key-figure">${formatCurrency(totalGstFreeIncome)}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
         <div class="section-title">GST Applicable Expenses (GST Exclusive)</div>
         <table>
             <thead>
@@ -222,7 +310,7 @@ $commonScripts
                 </tr>
             </thead>
             <tbody>
-                ${_generateExpenseRows(expenseTotals, chartOfAccounts, startDate, endDate)}
+                ${_generateAccountRows(gstOnExpenseTotals, chartOfAccounts, startDate, endDate, isPositive: false)}
                 <tr class="total-row">
                     <td>Total GST Exclusive Expenses:</td>
                     <td class="amount negative key-figure">${formatCurrency(totalGstExclusiveExpenses)}</td>
@@ -234,6 +322,25 @@ $commonScripts
                 <tr class="item-group">
                     <td>Total GST Inclusive Expenses:</td>
                     <td class="amount negative key-figure">${formatCurrency(totalGstExclusiveExpenses + gstOnExpenses)}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">GST Free Expenses</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th class="amount-column">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${_generateAccountRows(gstFreeExpenseTotals, chartOfAccounts, startDate, endDate, isPositive: false)}
+                <tr class="total-row">
+                    <td>Total GST Free Expenses:</td>
+                    <td class="amount negative key-figure">${formatCurrency(totalGstFreeExpenses)}</td>
                 </tr>
             </tbody>
         </table>
@@ -272,14 +379,15 @@ $commonScripts
     return buffer.toString();
   }
 
-  /// Generates HTML rows for income accounts
-  String _generateIncomeRows(
-      Map<String, double> incomeTotals,
+  /// Generates HTML rows for accounts
+  String _generateAccountRows(
+      Map<String, double> accountTotals,
       ChartOfAccountsService chartOfAccounts,
       DateTime startDate,
-      DateTime endDate) {
+      DateTime endDate,
+      {required bool isPositive}) {
     final buffer = StringBuffer();
-    for (final entry in incomeTotals.entries) {
+    for (final entry in accountTotals.entries) {
       final account = chartOfAccounts.getAccount(entry.key);
       if (account != null) {
         // Get transaction count for this account
@@ -288,29 +396,7 @@ $commonScripts
 
         buffer.write(generateAccountRow(
             account, entry.value, startDate, endDate,
-            isPositive: true, transactionCount: transactions.length));
-      }
-    }
-    return buffer.toString();
-  }
-
-  /// Generates HTML rows for expense accounts
-  String _generateExpenseRows(
-      Map<String, double> expenseTotals,
-      ChartOfAccountsService chartOfAccounts,
-      DateTime startDate,
-      DateTime endDate) {
-    final buffer = StringBuffer();
-    for (final entry in expenseTotals.entries) {
-      final account = chartOfAccounts.getAccount(entry.key);
-      if (account != null) {
-        // Get transaction count for this account
-        final transactions =
-            getTransactionsForAccount(account.code, startDate, endDate);
-
-        buffer.write(generateAccountRow(
-            account, entry.value, startDate, endDate,
-            isPositive: false, transactionCount: transactions.length));
+            isPositive: isPositive, transactionCount: transactions.length));
       }
     }
     return buffer.toString();
