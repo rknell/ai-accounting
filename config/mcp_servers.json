@@ -1,14 +1,5 @@
 {
     "mcpServers": {
-        "accountant": {
-            "command": "dart",
-            "args": [
-                "run",
-                "mcp/mcp_server_accountant.dart"
-            ],
-            "env": {},
-            "description": "Accountant MCP server for secure accounting operations and transaction management"
-        },
         "puppeteer": {
             "command": "dart",
             "args": [
@@ -23,10 +14,38 @@
             "args": [
                 "-y",
                 "@modelcontextprotocol/server-filesystem",
-                "."
+                ".",
+                "../"
             ],
             "env": {},
             "description": "Filesystem MCP server for file operations with access to current directory"
+        },
+        "dart": {
+            "command": "dart",
+            "args": [
+                "run",
+                "mcp/mcp_server_dart.dart"
+            ],
+            "env": {},
+            "description": "Dart MCP server for Dart development operations including analysis, fixing, and execution"
+        },
+        "terminal": {
+            "command": "dart",
+            "args": [
+                "run",
+                "mcp/mcp_server_terminal.dart"
+            ],
+            "env": {},
+            "description": "Terminal MCP server for secure local system command execution with comprehensive security validation and output capture"
+        },
+        "context-manager": {
+            "command": "dart",
+            "args": [
+                "run",
+                "mcp/mcp_server_context_manager.dart"
+            ],
+            "env": {},
+            "description": "Context Manager MCP server for intelligent context optimization, session management, and AI context window management with comprehensive token tracking and session persistence"
         }
     }
 }

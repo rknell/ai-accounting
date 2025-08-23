@@ -1,6 +1,6 @@
-import 'package:test/test.dart';
 import 'package:ai_accounting/services/report_generation_service.dart';
 import 'package:ai_accounting/services/services.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('🛡️ REGRESSION: ReportGenerationService Integration Tests', () {

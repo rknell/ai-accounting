@@ -18,12 +18,12 @@ import 'package:ai_accounting/services/services.dart';
 ///
 /// **USAGE**: dart run bin/cleanup_uncategorized.dart
 
-const String UNCATEGORIZED_ACCOUNT_CODE = '999';
+const String uncategorizedAccountCode = '999';
 
 Future<void> main() async {
   print('💀 NUCLEAR CLEANUP PROTOCOL INITIATED...');
   print(
-      '⚠️  WARNING: This script will DELETE uncategorized transactions (account $UNCATEGORIZED_ACCOUNT_CODE)');
+      '⚠️  WARNING: This script will DELETE uncategorized transactions (account $uncategorizedAccountCode)');
 
   try {
     // === INITIALIZATION PHASE ===
@@ -33,7 +33,7 @@ Future<void> main() async {
     // === STEP 2: SCAN FOR UNCATEGORIZED TRANSACTIONS ===
     print('🔍 Step 2: Scanning for uncategorized transactions...');
     final uncategorizedEntries =
-        services.generalJournal.getEntriesByAccount(UNCATEGORIZED_ACCOUNT_CODE);
+        services.generalJournal.getEntriesByAccount(uncategorizedAccountCode);
 
     if (uncategorizedEntries.isEmpty) {
       print('✨ No uncategorized transactions found - system is clean!');

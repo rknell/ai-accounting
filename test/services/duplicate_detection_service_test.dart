@@ -1,7 +1,7 @@
-import 'package:test/test.dart';
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/models/split_transaction.dart';
 import 'package:ai_accounting/services/general_journal_service.dart';
+import 'package:test/test.dart';
 
 /// 🧪 PERMANENT TEST FORTRESS: GeneralJournalService Duplicate Detection
 ///

@@ -106,20 +106,26 @@ class GeneralJournal {
         debits.fold(0.0, (sum, item) => sum + item.amount).toStringAsFixed(2));
     final creditTotal = double.parse(
         credits.fold(0.0, (sum, item) => sum + item.amount).toStringAsFixed(2));
-    assert(debitTotal == creditTotal,
-        'Debits ($debitTotal) and credits ($creditTotal) must balance');
+    if (debitTotal != creditTotal) {
+      throw Exception(
+          'Debits (\$${debitTotal.toStringAsFixed(2)}) and credits (\$${creditTotal.toStringAsFixed(2)}) must balance');
+    }
 
     // Validate that all accounts exist in the chart of accounts
     for (var debit in debits) {
       final account = services.chartOfAccounts.getAccount(debit.accountCode);
-      assert(account != null,
-          'Debit account with code "${debit.accountCode}" does not exist in the chart of accounts.');
+      if (account == null) {
+        throw Exception(
+            'Debit account with code "${debit.accountCode}" does not exist in the chart of accounts.');
+      }
     }
 
     for (var credit in credits) {
       final account = services.chartOfAccounts.getAccount(credit.accountCode);
-      assert(account != null,
-          'Credit account with code "${credit.accountCode}" does not exist in the chart of accounts.');
+      if (account == null) {
+        throw Exception(
+            'Credit account with code "${credit.accountCode}" does not exist in the chart of accounts.');
+      }
     }
   }
 

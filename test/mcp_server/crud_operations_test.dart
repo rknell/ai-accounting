@@ -2,6 +2,7 @@
 ///
 /// This test verifies that all CRUD operations work correctly for both supplier management
 /// and accounting rules management in the MCP server.
+library;
 
 import 'dart:convert';
 import 'dart:io';

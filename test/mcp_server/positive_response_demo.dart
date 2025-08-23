@@ -2,6 +2,7 @@
 ///
 /// This demo shows how the updated read_supplier tool returns positive,
 /// actionable responses instead of "failed" messages that reduce AI confidence.
+library;
 
 import 'dart:convert';
 import 'dart:io';

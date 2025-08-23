@@ -65,6 +65,7 @@ class AccountantMCPServer extends BaseMCPServer {
           'bank_protection',
           'report_regeneration',
           'supplier_crud',
+          'supplier_fuzzy_matching',
           'accounting_rules_crud',
           'audit_reports',
         ],
@@ -645,6 +646,57 @@ class AccountantMCPServer extends BaseMCPServer {
       callback: _handleListSuppliers,
     ));
 
+    registerTool(MCPTool(
+      name: 'match_supplier_fuzzy',
+      description:
+          'AI-powered fuzzy matching to find the best supplier match for a transaction description using string distance, AI analysis, and web research',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'transactionDescription': {
+            'type': 'string',
+            'description':
+                'Raw transaction description to match against suppliers (e.g., "SP GITHUB PAYMENT", "Visa Purchase 7-Eleven 4210")',
+          },
+          'isIncomeTransaction': {
+            'type': 'boolean',
+            'description':
+                'Whether this transaction increases the bank balance (income/sales). Income can be from individuals or businesses, expenses are typically businesses only.',
+            'default': false,
+          },
+          'maxCandidates': {
+            'type': 'integer',
+            'description':
+                'Maximum number of candidate matches to consider (default: 10)',
+            'default': 10,
+            'minimum': 5,
+            'maximum': 50,
+          },
+          'confidenceThreshold': {
+            'type': 'number',
+            'description':
+                'Minimum confidence score for auto-selection (0.0-1.0, default: 0.6)',
+            'default': 0.6,
+            'minimum': 0.0,
+            'maximum': 1.0,
+          },
+          'enableWebResearch': {
+            'type': 'boolean',
+            'description':
+                'Whether to use web research if no good matches found (default: true - ESSENTIAL for accurate supplier profiles)',
+            'default': true,
+          },
+          'apiKey': {
+            'type': 'string',
+            'description':
+                'API key for AI agent (optional, uses DEEPSEEK_API_KEY env var if not provided)',
+          },
+        },
+        'required': ['transactionDescription'],
+      },
+      callback: _handleMatchSupplierFuzzy,
+    ));
+
     // Legacy alias for backward compatibility
     registerTool(MCPTool(
       name: 'update_supplier_info',
@@ -1036,7 +1088,12 @@ class AccountantMCPServer extends BaseMCPServer {
       // Validate account exists
       final account = services.chartOfAccounts.getAccount(accountCode);
       if (account == null) {
-        throw MCPServerException('Account not found: $accountCode');
+        final chartOfAccounts = _getFormattedChartOfAccounts();
+        throw MCPServerException(jsonEncode({
+          'error': 'Account not in chart of accounts: $accountCode',
+          'message': 'Account not in chart of accounts. Chart of accounts is:',
+          'chartOfAccounts': chartOfAccounts,
+        }));
       }
 
       // Load journal entries
@@ -1195,7 +1252,12 @@ class AccountantMCPServer extends BaseMCPServer {
       // Validate new account exists
       final newAccount = services.chartOfAccounts.getAccount(newAccountCode);
       if (newAccount == null) {
-        throw MCPServerException('New account not found: $newAccountCode');
+        final chartOfAccounts = _getFormattedChartOfAccounts();
+        throw MCPServerException(jsonEncode({
+          'error': 'Account not in chart of accounts: $newAccountCode',
+          'message': 'Account not in chart of accounts. Chart of accounts is:',
+          'chartOfAccounts': chartOfAccounts,
+        }));
       }
 
       // Load journal entries
@@ -1287,7 +1349,12 @@ class AccountantMCPServer extends BaseMCPServer {
       // Validate account exists and is not a bank account
       final account = services.chartOfAccounts.getAccount(accountCode);
       if (account == null) {
-        throw MCPServerException('Account not found: $accountCode');
+        final chartOfAccounts = _getFormattedChartOfAccounts();
+        throw MCPServerException(jsonEncode({
+          'error': 'Account not in chart of accounts: $accountCode',
+          'message': 'Account not in chart of accounts. Chart of accounts is:',
+          'chartOfAccounts': chartOfAccounts,
+        }));
       }
 
       final accountCodeNum = int.tryParse(accountCode);
@@ -1503,7 +1570,12 @@ Notes: $notes
       // Validate account if changed
       final account = services.chartOfAccounts.getAccount(updatedAccountCode);
       if (account == null) {
-        throw MCPServerException('Account not found: $updatedAccountCode');
+        final chartOfAccounts = _getFormattedChartOfAccounts();
+        throw MCPServerException(jsonEncode({
+          'error': 'Account not in chart of accounts: $updatedAccountCode',
+          'message': 'Account not in chart of accounts. Chart of accounts is:',
+          'chartOfAccounts': chartOfAccounts,
+        }));
       }
 
       // Check for name conflicts if name is being changed
@@ -1765,7 +1837,12 @@ Notes: $updatedNotes
       // 🛡️ **SECURITY CHECK**: Validate account exists and is not a bank account
       final account = services.chartOfAccounts.getAccount(accountCode);
       if (account == null) {
-        throw MCPServerException('Account not found: $accountCode');
+        final chartOfAccounts = _getFormattedChartOfAccounts();
+        throw MCPServerException(jsonEncode({
+          'error': 'Account not in chart of accounts: $accountCode',
+          'message': 'Account not in chart of accounts. Chart of accounts is:',
+          'chartOfAccounts': chartOfAccounts,
+        }));
       }
 
       final accountCodeNum = int.tryParse(accountCode);
@@ -2521,6 +2598,241 @@ Notes: $notes
     }
   }
 
+  /// 🎯 **FUZZY SUPPLIER MATCHING HANDLER**: AI-powered supplier matching with string distance and web research
+  Future<MCPToolResult> _handleMatchSupplierFuzzy(
+      Map<String, dynamic> arguments) async {
+    final transactionDescription =
+        arguments['transactionDescription'] as String;
+    final isIncomeTransaction =
+        arguments['isIncomeTransaction'] as bool? ?? false;
+    final maxCandidates =
+        arguments['maxCandidates'] as int? ?? 10; // Reduced for speed
+    final confidenceThreshold =
+        (arguments['confidenceThreshold'] as num?)?.toDouble() ??
+            0.6; // Lower threshold for faster matching
+    final enableWebResearch = arguments['enableWebResearch'] as bool? ??
+        true; // ESSENTIAL for accurate supplier profiles
+    final providedApiKey = arguments['apiKey'] as String?;
+
+    // Reduced logging for performance
+    final transactionType = isIncomeTransaction ? 'INCOME' : 'EXPENSE';
+    logger?.call(
+        'info', 'Fuzzy matching ($transactionType): "$transactionDescription"');
+
+    try {
+      // Load supplier list
+      final supplierFile = File('$inputsPath/supplier_list.json');
+      List<Map<String, dynamic>> suppliers = [];
+
+      if (supplierFile.existsSync()) {
+        final jsonString = supplierFile.readAsStringSync();
+        if (jsonString.isNotEmpty) {
+          suppliers =
+              (jsonDecode(jsonString) as List).cast<Map<String, dynamic>>();
+        }
+      }
+
+      if (suppliers.isEmpty) {
+        logger?.call('info', 'No suppliers in list, will attempt web research');
+        if (enableWebResearch) {
+          // Web research enabled - run with extended timeout
+          logger?.call(
+              'info', 'Starting web research (this may take 30+ seconds)...');
+          try {
+            return await _performWebResearchForSupplier(
+                    transactionDescription, providedApiKey)
+                .timeout(Duration(
+                    seconds: 60)); // 60 second timeout for full web research
+          } on TimeoutException catch (e) {
+            logger?.call('error', 'Web research timed out after 45 seconds', e);
+            return MCPToolResult(
+              content: [
+                MCPContent.text(jsonEncode({
+                  'success': true,
+                  'matchFound': false,
+                  'confidence': 0.0,
+                  'transactionDescription': transactionDescription,
+                  'message':
+                      'Web research timed out - creating basic supplier entry',
+                  'error': 'Web research operation timed out after 45 seconds',
+                  'fallbackSupplier': {
+                    'name': _fallbackSupplierExtraction(
+                        transactionDescription, false),
+                    'supplies': 'Unknown - requires manual classification',
+                    'confidence': 0.3,
+                  },
+                  'suggestion':
+                      'Basic supplier created - please update manually with proper business details',
+                })),
+              ],
+            );
+          }
+        } else {
+          return MCPToolResult(
+            content: [
+              MCPContent.text(jsonEncode({
+                'success': true,
+                'matchFound': false,
+                'confidence': 0.0,
+                'transactionDescription': transactionDescription,
+                'message': 'No suppliers in database and web research disabled',
+                'suggestion': 'Enable web research or add suppliers manually',
+              })),
+            ],
+          );
+        }
+      }
+
+      // Step 1: Fast supplier name extraction (skip AI for speed)
+      final aiGuessedName = _fallbackSupplierExtraction(
+          transactionDescription, isIncomeTransaction);
+
+      // Step 2: Calculate string distances for all suppliers
+      final candidateMatches = _calculateStringDistances(
+          transactionDescription, aiGuessedName, suppliers, maxCandidates);
+
+      if (candidateMatches.isEmpty) {
+        logger?.call('info',
+            'No candidates found, starting web research (this may take 30+ seconds)...');
+        if (enableWebResearch) {
+          // Web research enabled - run with extended timeout
+          try {
+            return await _performWebResearchForSupplier(
+                    transactionDescription, providedApiKey)
+                .timeout(Duration(
+                    seconds: 60)); // 60 second timeout for full web research
+          } on TimeoutException catch (e) {
+            logger?.call('error', 'Web research timed out', e);
+            return MCPToolResult(
+              content: [
+                MCPContent.text(jsonEncode({
+                  'success': true,
+                  'matchFound': false,
+                  'confidence': 0.0,
+                  'transactionDescription': transactionDescription,
+                  'message': 'Web research timed out - no supplier match found',
+                  'error': 'Web research operation timed out after 20 seconds',
+                })),
+              ],
+            );
+          }
+        } else {
+          return MCPToolResult(
+            content: [
+              MCPContent.text(jsonEncode({
+                'success': true,
+                'matchFound': false,
+                'confidence': 0.0,
+                'transactionDescription': transactionDescription,
+                'aiGuessedName': aiGuessedName,
+                'message': 'No good candidates found and web research disabled',
+                'suggestion': 'Enable web research or check supplier list',
+              })),
+            ],
+          );
+        }
+      }
+
+      // Step 3: AI agent to select best match
+      // Step 3: Fast match selection (skip AI for speed)
+      final selectedMatch = _fallbackMatchSelection(candidateMatches);
+
+      if (selectedMatch != null &&
+          (selectedMatch['confidence'] as double) >= confidenceThreshold) {
+        logger?.call('info',
+            'High confidence match found: ${selectedMatch['supplier']['name']} (${selectedMatch['confidence']})');
+
+        return MCPToolResult(
+          content: [
+            MCPContent.text(jsonEncode({
+              'success': true,
+              'matchFound': true,
+              'confidence': selectedMatch['confidence'],
+              'supplier': selectedMatch['supplier'],
+              'transactionDescription': transactionDescription,
+              'aiGuessedName': aiGuessedName,
+              'candidatesConsidered': candidateMatches.length,
+              'matchingStrategy': selectedMatch['strategy'],
+              'message':
+                  'High confidence match found: ${selectedMatch['supplier']['name']}',
+            })),
+          ],
+        );
+      } else if (selectedMatch != null) {
+        // Low confidence match - return with warning
+        logger?.call('info',
+            'Low confidence match: ${selectedMatch['supplier']['name']} (${selectedMatch['confidence']})');
+
+        return MCPToolResult(
+          content: [
+            MCPContent.text(jsonEncode({
+              'success': true,
+              'matchFound': true,
+              'confidence': selectedMatch['confidence'],
+              'supplier': selectedMatch['supplier'],
+              'transactionDescription': transactionDescription,
+              'aiGuessedName': aiGuessedName,
+              'candidatesConsidered': candidateMatches.length,
+              'matchingStrategy': selectedMatch['strategy'],
+              'warning':
+                  'Low confidence match - manual verification recommended',
+              'message':
+                  'Low confidence match found: ${selectedMatch['supplier']['name']} (confidence: ${selectedMatch['confidence']})',
+              'alternatives': candidateMatches.take(5).toList(),
+            })),
+          ],
+        );
+      } else {
+        // No match selected by AI
+        logger?.call('info',
+            'AI could not select a good match, starting web research (this may take 30+ seconds)...');
+        if (enableWebResearch) {
+          // Web research enabled - run with extended timeout
+          try {
+            return await _performWebResearchForSupplier(
+                    transactionDescription, providedApiKey)
+                .timeout(Duration(
+                    seconds: 60)); // 60 second timeout for full web research
+          } on TimeoutException catch (e) {
+            logger?.call('error', 'Web research timed out', e);
+            return MCPToolResult(
+              content: [
+                MCPContent.text(jsonEncode({
+                  'success': true,
+                  'matchFound': false,
+                  'confidence': 0.0,
+                  'transactionDescription': transactionDescription,
+                  'message': 'Web research timed out - no supplier match found',
+                  'error': 'Web research operation timed out after 20 seconds',
+                })),
+              ],
+            );
+          }
+        } else {
+          return MCPToolResult(
+            content: [
+              MCPContent.text(jsonEncode({
+                'success': true,
+                'matchFound': false,
+                'confidence': 0.0,
+                'transactionDescription': transactionDescription,
+                'aiGuessedName': aiGuessedName,
+                'candidatesConsidered': candidateMatches.length,
+                'topCandidates': candidateMatches.take(5).toList(),
+                'message': 'AI could not select a confident match',
+                'suggestion': 'Review top candidates or enable web research',
+              })),
+            ],
+          );
+        }
+      }
+    } catch (e) {
+      logger?.call('error', 'Fuzzy supplier matching failed', e);
+      throw MCPServerException(
+          'Fuzzy supplier matching failed: ${e.toString()}');
+    }
+  }
+
   /// 🏪 **LEGACY SUPPLIER INFO HANDLER**: Add or update supplier information (backward compatibility)
   Future<MCPToolResult> _handleUpdateSupplierInfo(
       Map<String, dynamic> arguments) async {
@@ -2541,8 +2853,13 @@ Notes: $notes
         final account =
             services.chartOfAccounts.getAccount(suggestedAccountCode);
         if (account == null) {
-          throw MCPServerException(
-              'Suggested account code not found: $suggestedAccountCode');
+          final chartOfAccounts = _getFormattedChartOfAccounts();
+          throw MCPServerException(jsonEncode({
+            'error': 'Account not in chart of accounts: $suggestedAccountCode',
+            'message':
+                'Account not in chart of accounts. Chart of accounts is:',
+            'chartOfAccounts': chartOfAccounts,
+          }));
         }
       }
 
@@ -3419,6 +3736,861 @@ Notes: $notes
     }
   }
 
+  /// 🤖 **AI SUPPLIER NAME EXTRACTION**: Use AI to extract clean supplier name from transaction
+  Future<String> _aiGuessSupplierName(
+      String transactionDescription, String? apiKey) async {
+    try {
+      final effectiveApiKey =
+          apiKey ?? Platform.environment['DEEPSEEK_API_KEY'];
+      if (effectiveApiKey == null || effectiveApiKey.isEmpty) {
+        logger?.call('warning',
+            'No API key available for AI supplier name extraction, using fallback');
+        return _fallbackSupplierExtraction(transactionDescription, false);
+      }
+
+      final client = ApiClient(
+          baseUrl: "https://api.deepseek.com/v1", apiKey: effectiveApiKey);
+
+      final systemPrompt = '''
+You are an expert at extracting clean business names from bank transaction descriptions.
+
+Your task is to extract the most likely business/supplier name from a raw transaction description.
+
+Rules:
+1. Remove payment prefixes like "SP ", "Visa Purchase", "EFTPOS", "Paypal"
+2. Remove location codes, store numbers, and dates
+3. Remove transaction IDs and reference numbers
+4. Keep the core business name
+5. Return ONLY the cleaned business name, nothing else
+6. If uncertain, return the most prominent business-like text
+
+Examples:
+- "SP GITHUB PAYMENT" → "GitHub"
+- "Visa Purchase 17Dec 7-Eleven 4210 Ormeau" → "7-Eleven"
+- "EFTPOS WOOLWORTHS 1234 BRISBANE" → "Woolworths"
+- "Paypal Cursor AI" → "Cursor AI"
+- "DTF DIRECT PTY LTD" → "DTF Direct"
+
+Transaction description: "$transactionDescription"
+
+Clean business name:''';
+
+      final emptyRegistry = _EmptyToolRegistry();
+      final agent = Agent(
+        apiClient: client,
+        toolRegistry: emptyRegistry,
+        systemPrompt: systemPrompt,
+      )..temperature =
+          0.0; // Zero temperature for fastest, most deterministic results
+
+      final result = await agent
+          .sendMessage(transactionDescription)
+          .timeout(Duration(seconds: 60)); // 60 second timeout for AI calls
+      final cleanedName = result.content?.trim() ?? '';
+
+      await client.close();
+
+      if (cleanedName.isEmpty) {
+        return _fallbackSupplierExtraction(transactionDescription, false);
+      }
+
+      logger?.call('info',
+          'AI extracted supplier name: "$transactionDescription" → "$cleanedName"');
+      return cleanedName;
+    } catch (e) {
+      logger?.call('error', 'AI supplier name extraction failed', e);
+      return _fallbackSupplierExtraction(transactionDescription, false);
+    }
+  }
+
+  /// 📝 **FALLBACK SUPPLIER EXTRACTION**: Rule-based supplier name extraction
+  String _fallbackSupplierExtraction(
+      String transactionDescription, bool isIncomeTransaction) {
+    String cleaned = transactionDescription.toLowerCase().trim();
+
+    // For income transactions (deposits/credits), handle differently
+    if (isIncomeTransaction) {
+      // Income could be from individuals or businesses
+      if (cleaned.contains('osko deposit') ||
+          cleaned.contains('transfer') ||
+          cleaned.contains('deposit')) {
+        // Extract name from deposit descriptions like "Osko Deposit 06Jan14:37 Bella Stoneham Isobel Fay"
+        final nameMatch = RegExp(
+                r'(?:osko deposit|transfer|deposit).*?(?:\d{2}[a-z]{3}\d{0,2})?.*?([a-z\s]{4,})',
+                caseSensitive: false)
+            .firstMatch(transactionDescription);
+        if (nameMatch != null && nameMatch.group(1) != null) {
+          final extractedName = nameMatch.group(1)!.trim();
+          // For individuals, keep full name; for businesses, extract key words
+          if (_looksLikePersonName(extractedName)) {
+            return _capitalizeWords(extractedName);
+          }
+        }
+      }
+      // For other income types, fall through to business extraction
+    }
+
+    // For expense transactions or business income, assume business names
+    // Remove common prefixes
+    final prefixes = [
+      'sp ',
+      'visa purchase ',
+      'eftpos ',
+      'paypal ',
+      'sq ',
+      'stripe ',
+      'direct debit ',
+    ];
+
+    for (final prefix in prefixes) {
+      if (cleaned.startsWith(prefix)) {
+        cleaned = cleaned.substring(prefix.length);
+        break;
+      }
+    }
+
+    // Remove dates (various formats)
+    cleaned = cleaned.replaceAll(RegExp(r'\d{1,2}[a-z]{3}\d{0,4}'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'\d{1,2}\/\d{1,2}\/\d{2,4}'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'\d{4}-\d{2}-\d{2}'), '');
+
+    // Remove location codes and store numbers
+    cleaned = cleaned.replaceAll(RegExp(r'\s+\d{3,6}\s+'), ' ');
+    cleaned = cleaned.replaceAll(RegExp(r'\s+\d{3,6}$'), '');
+
+    // Remove common location words at the end
+    final locationWords = [
+      'brisbane',
+      'sydney',
+      'melbourne',
+      'perth',
+      'adelaide',
+      'darwin',
+      'canberra',
+      'qld',
+      'nsw',
+      'vic',
+      'wa',
+      'sa',
+      'nt',
+      'act',
+      'tas',
+      'australia',
+      'au'
+    ];
+
+    for (final location in locationWords) {
+      if (cleaned.endsWith(' $location')) {
+        cleaned = cleaned.substring(0, cleaned.length - location.length - 1);
+      }
+    }
+
+    // Clean up extra whitespace and capitalize properly
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    if (cleaned.isEmpty) {
+      return transactionDescription.trim();
+    }
+
+    // Capitalize first letter of each word
+    return _capitalizeWords(cleaned);
+  }
+
+  /// Check if a name looks like an individual person's name
+  bool _looksLikePersonName(String name) {
+    final words = name.split(' ').where((w) => w.length > 1).toList();
+    if (words.length < 2) return false;
+
+    // Simple heuristic: if it has 2-3 words and they look like names, likely a person
+    // Common business words that indicate it's not a person
+    final businessWords = [
+      'pty',
+      'ltd',
+      'inc',
+      'corp',
+      'company',
+      'group',
+      'services',
+      'solutions'
+    ];
+    final nameLower = name.toLowerCase();
+
+    if (businessWords.any((word) => nameLower.contains(word))) {
+      return false;
+    }
+
+    // If 2-3 words and no obvious business indicators, likely a person
+    return words.length >= 2 && words.length <= 3;
+  }
+
+  /// Capitalize words properly
+  String _capitalizeWords(String text) {
+    return text
+        .split(' ')
+        .map((word) =>
+            word.isEmpty ? word : word[0].toUpperCase() + word.substring(1))
+        .join(' ');
+  }
+
+  /// 📏 **STRING DISTANCE CALCULATION**: Calculate similarity scores for all suppliers
+  List<Map<String, dynamic>> _calculateStringDistances(
+    String transactionDescription,
+    String aiGuessedName,
+    List<Map<String, dynamic>> suppliers,
+    int maxCandidates,
+  ) {
+    final candidates = <Map<String, dynamic>>[];
+
+    for (final supplier in suppliers) {
+      final supplierName = supplier['name'] as String;
+
+      // Calculate multiple distance metrics
+      final nameToTransaction = _levenshteinDistance(
+          supplierName.toLowerCase(), transactionDescription.toLowerCase());
+      final nameToAiGuess = _levenshteinDistance(
+          supplierName.toLowerCase(), aiGuessedName.toLowerCase());
+      final normalizedNameToTransaction = _normalizedLevenshtein(
+          supplierName.toLowerCase(), transactionDescription.toLowerCase());
+      final normalizedNameToAiGuess = _normalizedLevenshtein(
+          supplierName.toLowerCase(), aiGuessedName.toLowerCase());
+
+      // Jaro-Winkler distance for better string similarity
+      final jaroWinklerToTransaction = _jaroWinklerSimilarity(
+          supplierName.toLowerCase(), transactionDescription.toLowerCase());
+      final jaroWinklerToAiGuess = _jaroWinklerSimilarity(
+          supplierName.toLowerCase(), aiGuessedName.toLowerCase());
+
+      // Substring matching bonus
+      final containsSupplierInTransaction = transactionDescription
+          .toLowerCase()
+          .contains(supplierName.toLowerCase());
+      final containsSupplierInAiGuess =
+          aiGuessedName.toLowerCase().contains(supplierName.toLowerCase());
+      final supplierContainsAiGuess =
+          supplierName.toLowerCase().contains(aiGuessedName.toLowerCase());
+
+      // Calculate composite score (higher is better)
+      double compositeScore = 0.0;
+
+      // Jaro-Winkler similarity (0-1, higher is better)
+      compositeScore += jaroWinklerToTransaction * 0.3;
+      compositeScore += jaroWinklerToAiGuess * 0.4;
+
+      // Normalized Levenshtein (0-1, higher is better)
+      compositeScore += (1.0 - normalizedNameToTransaction) * 0.15;
+      compositeScore += (1.0 - normalizedNameToAiGuess) * 0.15;
+
+      // Substring matching bonuses
+      if (containsSupplierInTransaction) compositeScore += 0.2;
+      if (containsSupplierInAiGuess) compositeScore += 0.3;
+      if (supplierContainsAiGuess) compositeScore += 0.25;
+
+      // Fuzzy match bonus using existing logic
+      if (_isFuzzyMatch(aiGuessedName, supplierName)) {
+        compositeScore += 0.4;
+      }
+
+      candidates.add({
+        'supplier': supplier,
+        'compositeScore': compositeScore,
+        'metrics': {
+          'nameToTransaction': nameToTransaction,
+          'nameToAiGuess': nameToAiGuess,
+          'normalizedNameToTransaction': normalizedNameToTransaction,
+          'normalizedNameToAiGuess': normalizedNameToAiGuess,
+          'jaroWinklerToTransaction': jaroWinklerToTransaction,
+          'jaroWinklerToAiGuess': jaroWinklerToAiGuess,
+          'containsSupplierInTransaction': containsSupplierInTransaction,
+          'containsSupplierInAiGuess': containsSupplierInAiGuess,
+          'supplierContainsAiGuess': supplierContainsAiGuess,
+          'fuzzyMatch': _isFuzzyMatch(aiGuessedName, supplierName),
+        },
+      });
+    }
+
+    // Sort by composite score (highest first) and take top candidates
+    candidates.sort((a, b) => (b['compositeScore'] as double)
+        .compareTo(a['compositeScore'] as double));
+
+    return candidates.take(maxCandidates).toList();
+  }
+
+  /// 🤖 **AI MATCH SELECTION**: Use AI to select the best match from candidates
+  Future<Map<String, dynamic>?> _aiSelectBestMatch(
+    String transactionDescription,
+    String aiGuessedName,
+    List<Map<String, dynamic>> candidateMatches,
+    String? apiKey,
+  ) async {
+    try {
+      final effectiveApiKey =
+          apiKey ?? Platform.environment['DEEPSEEK_API_KEY'];
+      if (effectiveApiKey == null || effectiveApiKey.isEmpty) {
+        logger?.call('warning',
+            'No API key available for AI match selection, using fallback');
+        return _fallbackMatchSelection(candidateMatches);
+      }
+
+      final client = ApiClient(
+          baseUrl: "https://api.deepseek.com/v1", apiKey: effectiveApiKey);
+
+      // Prepare candidates for AI analysis
+      final candidatesText = candidateMatches.asMap().entries.map((entry) {
+        final index = entry.key + 1;
+        final candidate = entry.value;
+        final supplier = candidate['supplier'] as Map<String, dynamic>;
+        final score = candidate['compositeScore'] as double;
+
+        return '$index. ${supplier['name']} - ${supplier['supplies']} (Score: ${score.toStringAsFixed(3)})';
+      }).join('\n');
+
+      final systemPrompt = '''
+You are an expert at matching bank transaction descriptions to known suppliers.
+
+Your task is to select the best supplier match from the candidates provided, or determine that no good match exists.
+
+Rules:
+1. Consider the transaction description and the AI-guessed business name
+2. Look at each candidate's name, what they supply, and their similarity score
+3. Choose the candidate that makes the most business sense
+4. Return confidence score from 0.0 to 1.0 (1.0 = perfect match)
+5. If no candidate seems reasonable, return confidence 0.0
+
+Response format (JSON only):
+{
+  "selectedIndex": 1,
+  "confidence": 0.85,
+  "reasoning": "7-Eleven matches the transaction description and supplies convenience items",
+  "strategy": "name_and_business_match"
+}
+
+Or if no match:
+{
+  "selectedIndex": 0,
+  "confidence": 0.0,
+  "reasoning": "None of the candidates seem to match this transaction type",
+  "strategy": "no_match"
+}
+
+Transaction description: "$transactionDescription"
+AI guessed name: "$aiGuessedName"
+
+Candidates:
+$candidatesText
+
+Analysis:''';
+
+      final emptyRegistry = _EmptyToolRegistry();
+      final agent = Agent(
+        apiClient: client,
+        toolRegistry: emptyRegistry,
+        systemPrompt: systemPrompt,
+      )..temperature = 0.0; // Zero temperature for fastest results
+
+      final result = await agent
+          .sendMessage('Select the best match.')
+          .timeout(Duration(seconds: 60)); // 60 second timeout for AI calls
+      final rawContent = result.content?.trim() ?? '';
+
+      await client.close();
+
+      if (rawContent.isEmpty) {
+        return _fallbackMatchSelection(candidateMatches);
+      }
+
+      // Parse AI response
+      String cleanedJson = rawContent;
+      if (cleanedJson.startsWith('```json')) {
+        cleanedJson = cleanedJson.replaceFirst('```json', '').trim();
+      }
+      if (cleanedJson.startsWith('```')) {
+        cleanedJson = cleanedJson.replaceFirst('```', '').trim();
+      }
+      if (cleanedJson.endsWith('```')) {
+        cleanedJson = cleanedJson
+            .replaceRange(
+                cleanedJson.lastIndexOf('```'), cleanedJson.length, '')
+            .trim();
+      }
+
+      final aiResponse = jsonDecode(cleanedJson) as Map<String, dynamic>;
+      final selectedIndex = aiResponse['selectedIndex'] as int;
+      final confidence = (aiResponse['confidence'] as num).toDouble();
+      final reasoning = aiResponse['reasoning'] as String? ?? '';
+      final strategy = aiResponse['strategy'] as String? ?? 'ai_selection';
+
+      if (selectedIndex > 0 &&
+          selectedIndex <= candidateMatches.length &&
+          confidence > 0.0) {
+        final selectedCandidate = candidateMatches[selectedIndex - 1];
+
+        logger?.call('info',
+            'AI selected match: ${selectedCandidate['supplier']['name']} (confidence: $confidence)');
+
+        return {
+          'supplier': selectedCandidate['supplier'],
+          'confidence': confidence,
+          'reasoning': reasoning,
+          'strategy': strategy,
+          'metrics': selectedCandidate['metrics'],
+        };
+      } else {
+        logger?.call('info', 'AI determined no good match exists');
+        return null;
+      }
+    } catch (e) {
+      logger?.call('error', 'AI match selection failed', e);
+      return _fallbackMatchSelection(candidateMatches);
+    }
+  }
+
+  /// 🎯 **FALLBACK MATCH SELECTION**: Rule-based match selection when AI fails
+  Map<String, dynamic>? _fallbackMatchSelection(
+      List<Map<String, dynamic>> candidateMatches) {
+    if (candidateMatches.isEmpty) return null;
+
+    // Use the highest scoring candidate if it meets minimum threshold
+    final topCandidate = candidateMatches.first;
+    final score = topCandidate['compositeScore'] as double;
+
+    if (score >= 0.6) {
+      return {
+        'supplier': topCandidate['supplier'],
+        'confidence': score,
+        'reasoning': 'Highest composite similarity score',
+        'strategy': 'fallback_score_based',
+        'metrics': topCandidate['metrics'],
+      };
+    }
+
+    return null;
+  }
+
+  /// 🔍 **WEB RESEARCH FOR SUPPLIER**: Perform web research when no match found
+  Future<MCPToolResult> _performWebResearchForSupplier(
+      String transactionDescription, String? apiKey) async {
+    try {
+      final effectiveApiKey =
+          apiKey ?? Platform.environment['DEEPSEEK_API_KEY'];
+      if (effectiveApiKey == null || effectiveApiKey.isEmpty) {
+        return MCPToolResult(
+          content: [
+            MCPContent.text(jsonEncode({
+              'success': true,
+              'matchFound': false,
+              'confidence': 0.0,
+              'transactionDescription': transactionDescription,
+              'message': 'No API key available for web research',
+              'suggestion': 'Provide API key or add supplier manually',
+            })),
+          ],
+        );
+      }
+
+      logger?.call(
+          'info', 'Performing web research for: $transactionDescription');
+
+      // Extract potential business name for search
+      final searchTerm =
+          await _aiGuessSupplierName(transactionDescription, apiKey);
+      final searchUrl =
+          'https://duckduckgo.com/?q=${Uri.encodeComponent(searchTerm)}';
+
+      final client = ApiClient(
+          baseUrl: "https://api.deepseek.com/v1", apiKey: effectiveApiKey);
+
+      // Load MCP config for puppeteer
+      final mcpConfig =
+          File(path.join(Directory.current.path, 'config', 'mcp_servers.json'));
+      final toolRegistry = McpToolExecutorRegistry(mcpConfig: mcpConfig);
+      await toolRegistry.initialize();
+
+      // Perform web search with longer timeout
+      final searchCall = ToolCall(
+        id: 'search_${DateTime.now().millisecondsSinceEpoch}',
+        type: 'function',
+        function: ToolCallFunction(
+          name: 'puppeteer_navigate',
+          arguments: jsonEncode({
+            'url': searchUrl,
+            'timeout': 15000, // 15 second timeout for web navigation
+            'waitUntil': 'domcontentloaded', // Faster loading
+          }),
+        ),
+      );
+
+      String searchResult;
+      try {
+        searchResult = await toolRegistry
+            .executeTool(searchCall)
+            .timeout(Duration(seconds: 20)); // 20 second overall timeout
+      } on TimeoutException catch (e) {
+        logger?.call('error', 'Web search timed out after 20 seconds', e);
+        await toolRegistry.shutdown();
+        await client.close();
+
+        return MCPToolResult(
+          content: [
+            MCPContent.text(jsonEncode({
+              'success': true,
+              'matchFound': false,
+              'confidence': 0.0,
+              'transactionDescription': transactionDescription,
+              'message': 'Web research timed out',
+              'error': 'Web search operation timed out after 20 seconds',
+              'suggestion': 'Try again later or add supplier manually',
+            })),
+          ],
+        );
+      }
+
+      // Handle puppeteer response - it returns plain text content, not JSON
+      String searchContent;
+      if (searchResult.startsWith('{')) {
+        // If it's JSON format (from some MCP implementations)
+        try {
+          final searchData = jsonDecode(searchResult) as Map<String, dynamic>;
+          if (searchData['success'] != true) {
+            await toolRegistry.shutdown();
+            await client.close();
+
+            return MCPToolResult(
+              content: [
+                MCPContent.text(jsonEncode({
+                  'success': true,
+                  'matchFound': false,
+                  'confidence': 0.0,
+                  'transactionDescription': transactionDescription,
+                  'message': 'Web research failed',
+                  'error': searchData['error'] ?? 'Unknown error',
+                })),
+              ],
+            );
+          }
+          searchContent = searchData['content'] as String? ?? '';
+        } catch (e) {
+          logger?.call(
+              'error', 'Failed to parse JSON response from puppeteer', e);
+          searchContent = searchResult; // Use raw content as fallback
+        }
+      } else {
+        // Plain text response (normal for this puppeteer implementation)
+        searchContent = searchResult;
+        logger?.call('info',
+            'Received ${searchContent.length} characters from web search');
+      }
+
+      // Analyze search results with AI
+
+      // Check if search content is meaningful
+      if (searchContent.isEmpty || searchContent.trim().length < 10) {
+        logger?.call(
+            'warning', 'Web search returned minimal content: "$searchContent"');
+        await toolRegistry.shutdown();
+        await client.close();
+
+        return MCPToolResult(
+          content: [
+            MCPContent.text(jsonEncode({
+              'success': true,
+              'matchFound': false,
+              'confidence': 0.0,
+              'transactionDescription': transactionDescription,
+              'message': 'Web research returned insufficient content',
+              'searchContent': searchContent,
+            })),
+          ],
+        );
+      }
+
+      final analysisPrompt = '''
+Based on the web search results, analyze what this business does and create a supplier entry.
+
+Transaction description: "$transactionDescription"
+Search term used: "$searchTerm"
+
+Web search results:
+$searchContent
+
+Create a supplier entry with:
+1. Clean business name (remove location codes, store numbers)
+2. What they supply/provide
+3. Confidence level (0.0-1.0) that this is correct
+
+Response format (JSON only):
+{
+  "supplierName": "GitHub",
+  "supplies": "Software development tools and code hosting",
+  "confidence": 0.9,
+  "reasoning": "GitHub is clearly a software development platform based on search results"
+}
+
+If the search results are unclear or don't help identify the business:
+{
+  "supplierName": "",
+  "supplies": "",
+  "confidence": 0.0,
+  "reasoning": "Search results unclear or insufficient information"
+}
+
+Analysis:''';
+
+      final emptyRegistry = _EmptyToolRegistry();
+      final agent = Agent(
+        apiClient: client,
+        toolRegistry: emptyRegistry,
+        systemPrompt: analysisPrompt,
+      )..temperature =
+          0.0; // Zero temperature for fastest, most deterministic results
+
+      final analysisResult = await agent
+          .sendMessage('Analyze the search results.')
+          .timeout(Duration(
+              seconds: 30)); // 30 second timeout for web research AI analysis
+      final rawAnalysis = analysisResult.content?.trim() ?? '';
+
+      await toolRegistry.shutdown();
+      await client.close();
+
+      if (rawAnalysis.isEmpty) {
+        return MCPToolResult(
+          content: [
+            MCPContent.text(jsonEncode({
+              'success': true,
+              'matchFound': false,
+              'confidence': 0.0,
+              'transactionDescription': transactionDescription,
+              'message': 'Web research analysis failed',
+            })),
+          ],
+        );
+      }
+
+      // Parse analysis result with better error handling
+      String cleanedJson = rawAnalysis;
+      if (cleanedJson.startsWith('```json')) {
+        cleanedJson = cleanedJson.replaceFirst('```json', '').trim();
+      }
+      if (cleanedJson.startsWith('```')) {
+        cleanedJson = cleanedJson.replaceFirst('```', '').trim();
+      }
+      if (cleanedJson.endsWith('```')) {
+        cleanedJson = cleanedJson
+            .replaceRange(
+                cleanedJson.lastIndexOf('```'), cleanedJson.length, '')
+            .trim();
+      }
+
+      Map<String, dynamic> analysis;
+      try {
+        analysis = jsonDecode(cleanedJson) as Map<String, dynamic>;
+      } catch (e) {
+        logger?.call(
+            'error', 'Failed to parse AI analysis response as JSON', e);
+        return MCPToolResult(
+          content: [
+            MCPContent.text(jsonEncode({
+              'success': true,
+              'matchFound': false,
+              'confidence': 0.0,
+              'transactionDescription': transactionDescription,
+              'searchTerm': searchTerm,
+              'webResearch': true,
+              'message': 'Web research analysis failed - invalid JSON response',
+              'error':
+                  'AI returned non-JSON response: ${rawAnalysis.length > 200 ? '${rawAnalysis.substring(0, 200)}...' : rawAnalysis}',
+            })),
+          ],
+        );
+      }
+      final supplierName = analysis['supplierName'] as String? ?? '';
+      final supplies = analysis['supplies'] as String? ?? '';
+      final confidence = (analysis['confidence'] as num?)?.toDouble() ?? 0.0;
+      final reasoning = analysis['reasoning'] as String? ?? '';
+
+      if (supplierName.isNotEmpty && supplies.isNotEmpty && confidence > 0.5) {
+        // Create new supplier automatically
+        final createSupplierCall = ToolCall(
+          id: 'create_${DateTime.now().millisecondsSinceEpoch}',
+          type: 'function',
+          function: ToolCallFunction(
+            name: 'create_supplier',
+            arguments: jsonEncode({
+              'supplierName': supplierName,
+              'supplies': supplies,
+              'rawTransactionText': transactionDescription,
+              'businessDescription': reasoning,
+            }),
+          ),
+        );
+
+        await toolRegistry.initialize();
+        final createResult = await toolRegistry.executeTool(createSupplierCall);
+        final createData = jsonDecode(createResult) as Map<String, dynamic>;
+        await toolRegistry.shutdown();
+
+        if (createData['success'] == true) {
+          logger?.call(
+              'info', 'Created new supplier from web research: $supplierName');
+
+          return MCPToolResult(
+            content: [
+              MCPContent.text(jsonEncode({
+                'success': true,
+                'matchFound': true,
+                'confidence': confidence,
+                'supplier': createData['supplier'],
+                'transactionDescription': transactionDescription,
+                'searchTerm': searchTerm,
+                'webResearch': true,
+                'message':
+                    'New supplier created from web research: $supplierName',
+                'reasoning': reasoning,
+              })),
+            ],
+          );
+        }
+      }
+
+      return MCPToolResult(
+        content: [
+          MCPContent.text(jsonEncode({
+            'success': true,
+            'matchFound': false,
+            'confidence': confidence,
+            'transactionDescription': transactionDescription,
+            'searchTerm': searchTerm,
+            'webResearch': true,
+            'analysis': analysis,
+            'message':
+                'Web research completed but could not create reliable supplier match',
+          })),
+        ],
+      );
+    } catch (e) {
+      logger?.call('error', 'Web research for supplier failed', e);
+      return MCPToolResult(
+        content: [
+          MCPContent.text(jsonEncode({
+            'success': true,
+            'matchFound': false,
+            'confidence': 0.0,
+            'transactionDescription': transactionDescription,
+            'message': 'Web research failed with error',
+            'error': e.toString(),
+          })),
+        ],
+      );
+    }
+  }
+
+  /// 📏 **LEVENSHTEIN DISTANCE**: Calculate edit distance between strings
+  int _levenshteinDistance(String s1, String s2) {
+    if (s1.isEmpty) return s2.length;
+    if (s2.isEmpty) return s1.length;
+
+    final matrix =
+        List.generate(s1.length + 1, (i) => List.filled(s2.length + 1, 0));
+
+    for (int i = 0; i <= s1.length; i++) {
+      matrix[i][0] = i;
+    }
+    for (int j = 0; j <= s2.length; j++) {
+      matrix[0][j] = j;
+    }
+
+    for (int i = 1; i <= s1.length; i++) {
+      for (int j = 1; j <= s2.length; j++) {
+        final cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
+        matrix[i][j] = [
+          matrix[i - 1][j] + 1, // deletion
+          matrix[i][j - 1] + 1, // insertion
+          matrix[i - 1][j - 1] + cost, // substitution
+        ].reduce((a, b) => a < b ? a : b);
+      }
+    }
+
+    return matrix[s1.length][s2.length];
+  }
+
+  /// 📏 **NORMALIZED LEVENSHTEIN**: Levenshtein distance normalized to 0-1
+  double _normalizedLevenshtein(String s1, String s2) {
+    final maxLength = [s1.length, s2.length].reduce((a, b) => a > b ? a : b);
+    if (maxLength == 0) return 0.0;
+    return _levenshteinDistance(s1, s2) / maxLength;
+  }
+
+  /// 📏 **JARO-WINKLER SIMILARITY**: Advanced string similarity metric
+  double _jaroWinklerSimilarity(String s1, String s2) {
+    if (s1.isEmpty && s2.isEmpty) return 1.0;
+    if (s1.isEmpty || s2.isEmpty) return 0.0;
+
+    final jaro = _jaroSimilarity(s1, s2);
+    if (jaro < 0.7) return jaro;
+
+    // Calculate common prefix length (up to 4 characters)
+    int prefixLength = 0;
+    final maxPrefix = [4, s1.length, s2.length].reduce((a, b) => a < b ? a : b);
+
+    for (int i = 0; i < maxPrefix; i++) {
+      if (s1[i] == s2[i]) {
+        prefixLength++;
+      } else {
+        break;
+      }
+    }
+
+    return jaro + (0.1 * prefixLength * (1 - jaro));
+  }
+
+  /// 📏 **JARO SIMILARITY**: Base Jaro similarity calculation
+  double _jaroSimilarity(String s1, String s2) {
+    if (s1.isEmpty && s2.isEmpty) return 1.0;
+    if (s1.isEmpty || s2.isEmpty) return 0.0;
+
+    final matchWindow =
+        ((s1.length > s2.length ? s1.length : s2.length) / 2) - 1;
+    if (matchWindow < 1) return s1 == s2 ? 1.0 : 0.0;
+
+    final s1Matches = List.filled(s1.length, false);
+    final s2Matches = List.filled(s2.length, false);
+
+    int matches = 0;
+    int transpositions = 0;
+
+    // Find matches
+    for (int i = 0; i < s1.length; i++) {
+      final start = (i - matchWindow).clamp(0, s2.length - 1).toInt();
+      final end = (i + matchWindow + 1).clamp(0, s2.length).toInt();
+
+      for (int j = start; j < end; j++) {
+        if (s2Matches[j] || s1[i] != s2[j]) continue;
+        s1Matches[i] = true;
+        s2Matches[j] = true;
+        matches++;
+        break;
+      }
+    }
+
+    if (matches == 0) return 0.0;
+
+    // Count transpositions
+    int k = 0;
+    for (int i = 0; i < s1.length; i++) {
+      if (!s1Matches[i]) continue;
+      while (!s2Matches[k]) {
+        k++;
+      }
+      if (s1[i] != s2[k]) transpositions++;
+      k++;
+    }
+
+    return (matches / s1.length +
+            matches / s2.length +
+            (matches - transpositions / 2) / matches) /
+        3;
+  }
+
   /// 📦 **ZIP BACKUP UTILITY**: Create timestamped zip backups of directories
   Map<String, dynamic> _createZipBackup({
     required List<String> directoriesToBackup,
@@ -3522,6 +4694,34 @@ Notes: $notes
   }
 
   /// 🔍 **UTILITY METHODS**: Helper functions for transaction operations
+
+  /// 📋 **CHART OF ACCOUNTS FORMATTER**: Generate formatted chart of accounts for error messages
+  Map<String, dynamic> _getFormattedChartOfAccounts() {
+    final accounts = services.chartOfAccounts.getAllAccounts();
+    final accountsByType = <String, List<Map<String, dynamic>>>{};
+
+    for (final account in accounts) {
+      final type = account.type.value;
+      accountsByType.putIfAbsent(type, () => <Map<String, dynamic>>[]);
+      accountsByType[type]!.add({
+        'code': account.code,
+        'name': account.name,
+        'gst': account.gst,
+        'gstType': account.gstType.value,
+      });
+    }
+
+    // Sort accounts within each type by code
+    for (final typeAccounts in accountsByType.values) {
+      typeAccounts
+          .sort((a, b) => (a['code'] as String).compareTo(b['code'] as String));
+    }
+
+    return {
+      'totalAccounts': accounts.length,
+      'accountsByType': accountsByType,
+    };
+  }
 
   /// Find transaction by ID (date_description_amount_bankCode format)
   GeneralJournal? _findTransactionById(String transactionId) {
@@ -4599,14 +5799,25 @@ Notes: $notes
   }
 }
 
+/// 🔧 **EMPTY TOOL REGISTRY**: Minimal registry for AI agents without tools
+class _EmptyToolRegistry extends ToolExecutorRegistry {
+  final Map<String, ToolExecutor> _executors = <String, ToolExecutor>{};
+
+  @override
+  Map<String, ToolExecutor> get executors => _executors;
+}
+
 /// 🚀 **MAIN ENTRY POINT**: Start the Accountant MCP server
 void main() async {
   final server = AccountantMCPServer(
-    enableDebugLogging: true,
+    enableDebugLogging: false, // Reduced logging for performance
     logger: (level, message, [data]) {
-      final timestamp = DateTime.now().toIso8601String();
-      stderr.writeln(
-          '[$timestamp] [$level] $message${data != null ? ': $data' : ''}');
+      if (level == 'error' || level == 'info') {
+        // Only show important messages
+        final timestamp = DateTime.now().toIso8601String();
+        stderr.writeln(
+            '[$timestamp] [$level] $message${data != null ? ': $data' : ''}');
+      }
     },
   );
 

@@ -2,10 +2,11 @@
 ///
 /// This test verifies that the updated run.dart workflow correctly uses MCP tools
 /// for supplier management and transaction categorization instead of direct file manipulation.
+library;
 
-import 'package:test/test.dart';
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/models/split_transaction.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('🛡️ REGRESSION: MCP Workflow Integration', () {

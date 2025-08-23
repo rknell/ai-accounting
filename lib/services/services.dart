@@ -1,5 +1,6 @@
 import 'package:ai_accounting/services/bank_statement_service.dart';
 import 'package:ai_accounting/services/chart_of_accounts_service.dart';
+import 'package:ai_accounting/services/company_file_service.dart';
 import 'package:ai_accounting/services/environment_service.dart';
 import 'package:ai_accounting/services/general_journal_service.dart';
 import 'package:ai_accounting/services/report_generation_service.dart';
@@ -35,6 +36,9 @@ class Services {
 
   /// Private instance of the ReportGenerationService
   ReportGenerationService? _reportGeneration;
+
+  /// Private instance of the CompanyFileService
+  CompanyFileService? _companyFile;
 
   /// Instance of the ChartOfAccountsService
   ///
@@ -85,6 +89,16 @@ class Services {
   /// Lazily instantiated when first accessed.
   ReportGenerationService get reportGeneration {
     return _reportGeneration ??= ReportGenerationService(this);
+  }
+
+  /// Instance of the CompanyFileService
+  ///
+  /// Provides centralized management of company file operations including
+  /// loading, saving, validation, and migration from individual files.
+  /// All company data manipulation goes through this service.
+  /// Lazily instantiated when first accessed.
+  CompanyFileService get companyFile {
+    return _companyFile ??= CompanyFileService(testMode: _testMode);
   }
 }
 

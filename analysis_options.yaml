@@ -10,7 +10,7 @@ linter:
   rules:
     # Enforce package imports over relative imports
     prefer_relative_imports: false
-    always_use_package_imports: true
+    always_use_package_imports: false
     
     # Additional recommended rules for clean code
     directives_ordering: true
