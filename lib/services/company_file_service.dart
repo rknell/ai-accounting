@@ -6,6 +6,7 @@ import 'package:ai_accounting/models/account.dart';
 import 'package:ai_accounting/models/company_file.dart';
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/models/supplier.dart';
+import 'package:ai_accounting/utils/journal_sanitizer.dart';
 import 'package:crypto/crypto.dart';
 
 /// 🏢 **COMPANY FILE SERVICE**: Centralized service for managing company file operations
@@ -53,8 +54,7 @@ class CompanyFileService {
       'data/company_file.json';
 
   /// Indicates whether a persisted company file already exists
-  bool get hasPersistedCompanyFile =>
-      File(defaultCompanyFilePath).existsSync();
+  bool get hasPersistedCompanyFile => File(defaultCompanyFilePath).existsSync();
 
   /// Ensures the unified company file is available (migrating if needed)
   bool ensureCompanyFileReady({String? filePath}) {
@@ -134,6 +134,14 @@ class CompanyFileService {
 
       final jsonString = file.readAsStringSync();
       final jsonMap = jsonDecode(jsonString) as Map<String, dynamic>;
+      if (jsonMap['generalJournal'] is List) {
+        jsonMap['generalJournal'] = (jsonMap['generalJournal'] as List<dynamic>)
+            .map((entry) => JournalSanitizer.sanitizeEntry(
+                  Map<String, dynamic>.from(entry as Map<String, dynamic>),
+                  log: (message) => print(message),
+                ))
+            .toList();
+      }
 
       final previousValidationState = GeneralJournal.disableAccountValidation;
       GeneralJournal.disableAccountValidation = true;

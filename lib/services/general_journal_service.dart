@@ -8,6 +8,7 @@ import 'package:ai_accounting/models/split_transaction.dart';
 import 'package:ai_accounting/services/company_file_service.dart';
 import 'package:ai_accounting/services/environment_service.dart';
 import 'package:ai_accounting/services/services.dart';
+import 'package:ai_accounting/utils/journal_sanitizer.dart';
 import 'package:path/path.dart' as p;
 
 /// Service that provides access to general journal data
@@ -30,8 +31,9 @@ class GeneralJournalService {
     CompanyFileService? companyFileService,
     String? dataDirectory,
   })  : _testMode = testMode,
-        _dataDirectory =
-            dataDirectory ?? Platform.environment['AI_ACCOUNTING_DATA_DIR'] ?? 'data',
+        _dataDirectory = dataDirectory ??
+            Platform.environment['AI_ACCOUNTING_DATA_DIR'] ??
+            'data',
         _companyFileService = companyFileService {
     if (!_testMode) {
       _companyFileService?.ensureCompanyFileReady();
@@ -59,7 +61,8 @@ class GeneralJournalService {
       if (_shouldUseCompanyFile) {
         final companyFile = _companyFileService?.currentCompanyFile;
         if (companyFile == null) {
-          print('❌ Company file not loaded – falling back to general_journal.json');
+          print(
+              '❌ Company file not loaded – falling back to general_journal.json');
         } else {
           entries
             ..clear()
@@ -87,7 +90,11 @@ class GeneralJournalService {
 
       entries.clear();
       for (final jsonMap in jsonList) {
-        final entry = GeneralJournal.fromJson(jsonMap as Map<String, dynamic>);
+        final sanitized = JournalSanitizer.sanitizeEntry(
+          Map<String, dynamic>.from(jsonMap as Map<String, dynamic>),
+          log: (message) => print(message),
+        );
+        final entry = GeneralJournal.fromJson(sanitized);
         entries.add(entry);
       }
 
@@ -117,11 +124,12 @@ class GeneralJournalService {
 
       if (_shouldUseCompanyFile) {
         final persisted = _companyFileService?.updateCompanyFile(
-          (companyFile) =>
-              companyFile.copyWith(generalJournal: List<GeneralJournal>.from(entries)),
+          (companyFile) => companyFile.copyWith(
+              generalJournal: List<GeneralJournal>.from(entries)),
         );
         if (persisted != true) {
-          print('⚠️  Warning: Unable to persist journal entries to company file');
+          print(
+              '⚠️  Warning: Unable to persist journal entries to company file');
         }
       }
 
@@ -294,7 +302,7 @@ class GeneralJournalService {
   ///
   /// @param entry The journal entry to add
   /// @return True if successfully added, false if duplicate prevented
-  bool addEntry(GeneralJournal entry) {
+  bool addEntry(GeneralJournal entry, {bool persist = true}) {
     if (isFirstTransaction(entry)) {
       createOpeningBalance(entry);
     }
@@ -315,7 +323,10 @@ class GeneralJournalService {
     // 🛡️ DUPLICATE PREVENTION: Only add if bank statement has more occurrences than journal
     if (identicalEntriesInBankStatement > identicalEntriesInJournal) {
       entries.add(entry);
-      return saveEntries();
+      if (persist) {
+        return saveEntries();
+      }
+      return true;
     } else {
       // 🚫 DUPLICATE DETECTED: Transaction already imported (possibly categorized)
       return false;

@@ -290,3 +290,4 @@ tools/temp/
 test_inputs/
 test/*.txt
 *.dill
+.local-chrome/
