@@ -49,6 +49,6 @@ All entry points share the same setup pattern:
 ## Testing & Verification
 - Static analysis: `dart analyze`
 - Unit/integration tests: `dart test` (full suite) or granular targets under `test/mcp_server/` and `test/models/`
-- Helper scripts: `run_directory_test.sh`, `run_fix_test.sh`, `run_security_test.sh`
+- Helper scripts (in `tools/`): `run_directory_test.sh`, `run_fix_test.sh`, `run_security_test.sh`
 
 Keep this file up to date whenever you add/remove an MCP server, change data locations, or introduce new entry points. EOF
