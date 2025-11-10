@@ -32,6 +32,15 @@ dart test path/to/test.dart # focused run
 ```
 Helper scripts (`run_directory_test.sh`, `run_fix_test.sh`, `run_security_test.sh`) provide targeted checks for directories, fixes, and terminal security respectively.
 
+## Git Hooks
+Enable the shared hooks to prevent commits when analysis or tests fail:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The `pre-commit` hook runs `dart analyze` and the full `dart test` suite; it aborts the commit if either command fails.
+
 ## Documentation
 - `docs/ARCHITECTURE.md` – MCP servers, entry points, and operational notes.
 - `INSTRUCTIONS.md` – business-specific transaction categorisation rules.

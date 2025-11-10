@@ -32,7 +32,7 @@ void main() {
           arguments: jsonEncode({
             'transactionDescription': 'Pin Payments Transaction',
             'isIncomeTransaction': false,
-            'enableWebResearch': true,
+            'enableWebResearch': false,
             'maxCandidates': 10,
           }),
         ),

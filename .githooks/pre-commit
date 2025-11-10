@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+run_step() {
+  local description=$1
+  shift
+  echo "➡️  $description"
+  if "$@"; then
+    echo -e "${GREEN}✔ ${description} succeeded${NC}"
+  else
+    echo -e "${RED}✖ ${description} failed${NC}"
+    exit 1
+  fi
+}
+
+run_step "dart analyze" dart analyze >/dev/null
+run_step "dart test" dart test >/dev/null
