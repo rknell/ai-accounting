@@ -30,7 +30,10 @@ dart analyze
 dart test                  # entire suite
 dart test path/to/test.dart # focused run
 ```
-Helper scripts (`run_directory_test.sh`, `run_fix_test.sh`, `run_security_test.sh`) provide targeted checks for directories, fixes, and terminal security respectively.
+Helper scripts provide lightweight guardrails:
+- `./run_directory_test.sh` – validates that `inputs/`, `data/`, and `config/` exist and that their JSON files are well-formed.
+- `./run_fix_test.sh` – ensures the formatter, analyzer, and fix-oriented unit tests are clean.
+- `./run_security_test.sh` – confirms `.githooks/pre-commit` is active and replays the MCP timeout/security regressions.
 
 ## Git Hooks
 Enable the shared hooks to prevent commits when analysis or tests fail:

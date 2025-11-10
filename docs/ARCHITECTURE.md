@@ -30,6 +30,11 @@ All entry points share the same setup pattern:
 2. Instantiate `McpToolExecutorRegistry` and call `initialize()` (which launches each server and discovers tools).
 3. Pass the registry into whichever agent/client is running so tool execution can be routed centrally.
 
+## Shared Services
+- The `services` getter in `lib/services/services.dart` lazily registers a `Services` singleton with GetIt. Access services through this getter so MCP servers, entry points, and tests share the same instances.
+- `ChartOfAccountsService` and `GeneralJournalService` respect the `AI_ACCOUNTING_INPUTS_DIR`/`AI_ACCOUNTING_DATA_DIR` overrides, which keeps integration tests and temp fixtures isolated from production data.
+- When writing tests that need custom behaviour, register your own `Services(testMode: true)` with GetIt, or override specific services before invoking MCP handlers.
+
 ## Terminal Security Snapshot
 - **Allowed**: typical developer tooling (`git`, `dart`, `ls`, etc.).
 - **Blocked**: destructive commands (`rm -rf /`, `dd if=/dev/...`, privilege-escalation helpers) and any command outside the configured working-tree.
