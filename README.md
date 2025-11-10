@@ -38,7 +38,6 @@ Helper scripts (`run_directory_test.sh`, `run_fix_test.sh`, `run_security_test.s
 - `test/README.md` – structure of the MCP-focused test suites.
 
 ## Current Action Plan
-1. **Align categorisation logic with the chart of accounts** – update mapping rules in `bin/categorise_transactions.dart`/`lib/services/transaction_categorizer.dart`, add tests that assert every suggested code exists in `inputs/accounts.json`.
-2. **End-to-end MCP workflow validation** – script a happy-path test that runs the categoriser against fixture data while the accountant server is live, capturing tool calls and results.
-3. **Performance & resilience review** – profile the fuzzy-supplier flow, add caching where it reduces duplicate tool calls, and document timeout budgets per server (accountant already uses a 15 s discovery window).
-4. **Security & ergonomics polish** – run the security/directory helper scripts, document required environment variables, and make sure contributors know how the shared `Services` singleton is initialised when launching scripts/tests.
+1. **Performance & resilience review** – profile the fuzzy-supplier flow, add caching where it reduces duplicate tool calls, and document timeout budgets per server (accountant already uses a 15 s discovery window).
+2. **Security & ergonomics polish** – run the security/directory helper scripts, document required environment variables, and make sure contributors know how the shared `Services` singleton is initialised when launching scripts/tests.
+3. **Document & automate workflows** – wire the new integration tests/smoke tests into CI, and expand contributor docs with instructions for running MCP-backed tooling locally.
