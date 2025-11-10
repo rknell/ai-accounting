@@ -7,10 +7,20 @@ import 'package:path/path.dart' as p;
 
 /// Service that provides access to chart of accounts data
 class ChartOfAccountsService {
+  static const Account _postageAccount = Account(
+    id: null,
+    code: '208',
+    name: 'Postage',
+    type: AccountType.cogs,
+    gst: true,
+    gstType: GstType.gstOnExpenses,
+  );
+
   /// Creates a chart-of-accounts service that reads from [inputsDirectory] or
   /// falls back to the project `inputs/` directory (overridable via
   /// `AI_ACCOUNTING_INPUTS_DIR`).
-  ChartOfAccountsService({String? inputsDirectory, CompanyFileService? companyFileService})
+  ChartOfAccountsService(
+      {String? inputsDirectory, CompanyFileService? companyFileService})
       : _inputsDirectory = inputsDirectory ??
             Platform.environment['AI_ACCOUNTING_INPUTS_DIR'] ??
             'inputs',
@@ -54,6 +64,7 @@ class ChartOfAccountsService {
             accounts[account.code] = account;
           }
           _isLoaded = true;
+          _ensureDerivedAccounts();
           return true;
         }
       }
@@ -68,6 +79,7 @@ class ChartOfAccountsService {
       }
 
       _isLoaded = true;
+      _ensureDerivedAccounts();
       return true;
     } catch (e) {
       print('Error loading accounts: $e');
@@ -180,5 +192,12 @@ class ChartOfAccountsService {
       code++;
     }
     return code.toString().padLeft(3, '0');
+  }
+
+  void _ensureDerivedAccounts() {
+    if (accounts.containsKey(_postageAccount.code)) {
+      return;
+    }
+    accounts[_postageAccount.code] = _postageAccount;
   }
 }

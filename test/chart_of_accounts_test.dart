@@ -35,4 +35,15 @@ void main() {
         expenseAccounts.every((account) => account.type == AccountType.expense),
         isTrue);
   });
+
+  test('ChartOfAccountsService ensures Postage COGS account exists', () async {
+    final service = ChartOfAccountsService();
+
+    final postage = service.getAccount('208');
+    expect(postage, isNotNull, reason: 'Postage account should be auto-added');
+    expect(postage?.type, AccountType.cogs);
+    expect(postage?.name, 'Postage');
+    expect(postage?.gstType, GstType.gstOnExpenses);
+    expect(postage?.gst, isTrue);
+  });
 }

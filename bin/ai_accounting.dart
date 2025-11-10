@@ -1,29 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:ai_accounting/agents/accounting_agent_shell.dart';
 import 'package:ai_accounting/exporters/general_journal_csv_exporter.dart';
 import 'package:ai_accounting/models/account.dart';
 import 'package:ai_accounting/services/services.dart';
 import 'package:path/path.dart' as path;
-
-const Map<String, String> _scriptDescriptions = {
-  'accounting_agent_ui.dart': 'Conversational accountant UI',
-  'ai_coding_assistant.dart': 'Developer-focused coding assistant',
-  'build_company_profile.dart':
-      'Scrape a business site and build company profile inputs',
-  'categorise_transactions.dart':
-      'AI categorisation workflow for uncategorised entries',
-  'cleanup_uncategorized.dart':
-      'Safely remove redundant uncategorised journal entries',
-  'generate_reports.dart': 'Generate P&L, balance sheet, GST, ledger reports',
-  'import_transactions.dart':
-      'Bulk import bank statements with duplicate protection',
-  'life_coach_ui.dart': 'General-purpose life/operations coaching shell',
-  'migrate_to_company_file.dart':
-      'Regenerate unified company file from legacy inputs/data',
-  'validate_journal_accounts.dart':
-      'Audit journal entries and fix invalid account references',
-};
 
 Future<void> main() async {
   final wizard = AccountingWizard();
@@ -58,7 +40,7 @@ class AccountingWizard {
           _handleMappingManager();
           break;
         case '5':
-          await _handleToolLauncher();
+          await _handleAiAccountantChat();
           break;
         case '6':
           await _handleGeneralJournalExport();
@@ -81,7 +63,7 @@ class AccountingWizard {
     print('2) Categorise uncategorised transactions');
     print('3) Generate financial reports');
     print('4) Manage bank statement filename mappings');
-    print('5) Run another bin/ tool');
+    print('5) Talk to the AI accountant');
     print('6) Export general journal to CSV');
     print('7) Exit');
   }
@@ -128,6 +110,28 @@ class AccountingWizard {
     }
   }
 
+  Future<void> _handleAiAccountantChat() async {
+    _warnIfMissingApiKey();
+    final shell = AccountingAgentShell(
+      config: AccountingAgentShellConfig(
+        introTitle: '🤖 AI Accountant Chat: MCP-backed assistant',
+        introDescription:
+            'Chat with the accounting LLM to investigate, search, and recategorise transactions.',
+        sessionIntro:
+            '💬 Talk directly to the AI accountant.\nType \'exit\', \'quit\', or \'done\' to finish.',
+        promptLabel: '💬 Enter your accounting request',
+        specialInstructions: kAccountingAgentStandardSpecialInstructions,
+        samplePrompts: const [
+          'Find all MyPost transactions and make sure they use the Postage (COGS) account.',
+          'Audit bank account 003 for uncategorised entries in the last 30 days.',
+          'Review transactions currently coded to 999 and suggest better accounts.',
+        ],
+      ),
+    );
+
+    await shell.run();
+  }
+
   Future<void> _runDartCommand(List<String> dartArgs) async {
     print('\n🔧 Running: dart ${dartArgs.join(' ')}');
     final process = await Process.start('dart', dartArgs);
@@ -141,63 +145,6 @@ class AccountingWizard {
     } else {
       print('❌ Command exited with code $exitCode.');
     }
-  }
-
-  Future<void> _handleToolLauncher() async {
-    final scripts = _discoverBinScripts();
-    if (scripts.isEmpty) {
-      print('⚠️  No other bin scripts were found.');
-      return;
-    }
-
-    print('\n--- Available bin/ tools ---');
-    for (int i = 0; i < scripts.length; i++) {
-      final filename = scripts[i];
-      final description = _scriptDescriptions[filename] ??
-          'Run $filename via dart run bin/$filename';
-      print('${i + 1}) $filename — $description');
-    }
-
-    final choice = _prompt(
-      'Enter the number to run a script (blank to cancel)',
-      allowEmpty: true,
-    );
-
-    if (choice == null || choice.isEmpty) {
-      print('↩️  Tool launch cancelled.');
-      return;
-    }
-
-    final index = int.tryParse(choice);
-    if (index == null || index < 1 || index > scripts.length) {
-      print('⚠️  Invalid selection.');
-      return;
-    }
-
-    final scriptName = scripts[index - 1];
-    final args = ['run', 'bin/$scriptName'];
-    if (scriptName == 'categorise_transactions.dart') {
-      _warnIfMissingApiKey();
-    }
-    await _runDartCommand(args);
-  }
-
-  List<String> _discoverBinScripts() {
-    final binDir = Directory(path.join(Directory.current.path, 'bin'));
-    if (!binDir.existsSync()) {
-      return [];
-    }
-
-    final files = binDir
-        .listSync()
-        .whereType<File>()
-        .where((file) => file.path.toLowerCase().endsWith('.dart'))
-        .map((file) => path.basename(file.path))
-        .where((name) => name != 'ai_accounting.dart')
-        .toList()
-      ..sort();
-
-    return files;
   }
 
   void _handleMappingManager() {
