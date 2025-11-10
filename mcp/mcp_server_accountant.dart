@@ -41,6 +41,10 @@ class AccountantMCPServer extends BaseMCPServer {
   final bool enableDebugLogging;
   final String inputsPath;
   final String dataPath;
+  List<Map<String, dynamic>>? _supplierCache;
+  DateTime? _supplierCacheMtime;
+  DateTime? _supplierCacheLoadedAt;
+  final Duration _supplierCacheTtl = const Duration(minutes: 5);
 
   AccountantMCPServer({
     super.name = 'accountant-ai',
@@ -2621,16 +2625,7 @@ Notes: $notes
 
     try {
       // Load supplier list
-      final supplierFile = File('$inputsPath/supplier_list.json');
-      List<Map<String, dynamic>> suppliers = [];
-
-      if (supplierFile.existsSync()) {
-        final jsonString = supplierFile.readAsStringSync();
-        if (jsonString.isNotEmpty) {
-          suppliers =
-              (jsonDecode(jsonString) as List).cast<Map<String, dynamic>>();
-        }
-      }
+      final suppliers = _loadSuppliers();
 
       if (suppliers.isEmpty) {
         logger?.call('info', 'No suppliers in list, will attempt web research');
@@ -5797,6 +5792,37 @@ Analysis:''';
   Future<void> shutdown() async {
     logger?.call('info', 'Shutting down Accountant MCP server');
     await super.shutdown();
+  }
+
+  List<Map<String, dynamic>> _loadSuppliers() {
+    final supplierFile = File('$inputsPath/supplier_list.json');
+    if (!supplierFile.existsSync()) {
+      _supplierCache = [];
+      _supplierCacheMtime = null;
+      _supplierCacheLoadedAt = DateTime.now();
+      return [];
+    }
+
+    final now = DateTime.now();
+    final mtime = supplierFile.statSync().modified;
+    final cacheExpired = _supplierCache == null ||
+        _supplierCacheMtime == null ||
+        mtime.isAfter(_supplierCacheMtime!) ||
+        _supplierCacheLoadedAt == null ||
+        now.difference(_supplierCacheLoadedAt!) > _supplierCacheTtl;
+
+    if (cacheExpired) {
+      final jsonString = supplierFile.readAsStringSync();
+      _supplierCache = jsonString.isEmpty
+          ? <Map<String, dynamic>>[]
+          : (jsonDecode(jsonString) as List).cast<Map<String, dynamic>>();
+      _supplierCacheMtime = mtime;
+      _supplierCacheLoadedAt = now;
+      logger?.call('debug',
+          'Supplier cache refreshed (${_supplierCache?.length ?? 0} entries)');
+    }
+
+    return List<Map<String, dynamic>>.from(_supplierCache!);
   }
 }
 

@@ -4,6 +4,7 @@ This project combines AI-powered categorisation with a suite of Model Context Pr
 
 ## Data & Configuration
 - **Company data** lives in `inputs/` (chart of accounts, suppliers, accounting rules, company profile) and `data/` (general journal). `CompanyFileService` loads these resources, provides validation, and can export/import combined snapshots.
+- **Overrides**: set `AI_ACCOUNTING_INPUTS_DIR`, `AI_ACCOUNTING_DATA_DIR`, or `AI_ACCOUNTING_CONFIG_DIR` to point the tooling at alternate working directories (useful for fixtures/tests). When unset, binaries fall back to the repo defaults.
 - **Environment**: set `DEEPSEEK_API_KEY` before running any agent entry point. Additional MCP-specific environment variables can be set inside `config/mcp_servers.json`.
 - **MCP registry**: `config/mcp_servers.json` lists all servers. Each entry maps directly to a `McpServerConfig` used by `McpToolExecutorRegistry`.
 
@@ -33,6 +34,12 @@ All entry points share the same setup pattern:
 - **Allowed**: typical developer tooling (`git`, `dart`, `ls`, etc.).
 - **Blocked**: destructive commands (`rm -rf /`, `dd if=/dev/...`, privilege-escalation helpers) and any command outside the configured working-tree.
 - **Resource guards**: every invocation has a timeout and output-size clamp; processes are cleaned up on failure.
+
+## Performance & Resilience Notes
+- **Supplier cache**: the accountant server caches `supplier_list.json` for five minutes (or until the file timestamp changes). This avoids re-reading JSON for every categorisation request while still picking up edits promptly.
+- **Timeout budgets**: `tools/list` requests default to 3 s, but heavyweight servers such as `accountant` request a 15 s window during discovery. Individual `tools/call` invocations should continue to pass explicit `timeout` values when they need stricter bounds.
+- **Web research**: tests disable web research when they assert latency-sensitive behaviour. Production categorisation keeps the default settings, but agents can pass `enableWebResearch: false` when they need deterministic responses.
+- **IO redirection**: entry points honour the `AI_ACCOUNTING_*` overrides noted above so you can run smoke tests (or CI) against temporary directories without touching the real books.
 
 ## Testing & Verification
 - Static analysis: `dart analyze`
