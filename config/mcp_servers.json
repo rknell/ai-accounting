@@ -46,6 +46,16 @@
             ],
             "env": {},
             "description": "Context Manager MCP server for intelligent context optimization, session management, and AI context window management with comprehensive token tracking and session persistence"
+        },
+        "accountant": {
+            "command": "dart",
+            "args": [
+                "run",
+                "mcp/mcp_server_accountant.dart"
+            ],
+            "env": {},
+            "toolsListTimeoutSeconds": 15,
+            "description": "Accountant MCP server providing supplier management, fuzzy matching, and chart of accounts operations"
         }
     }
 }

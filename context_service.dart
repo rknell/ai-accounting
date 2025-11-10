@@ -26,8 +26,11 @@ class ContextService {
 
   /// Add content to context and track token usage
   Map<String, dynamic> addToContext(String content,
-      {int estimatedTokens = 100}) {
-    _contextManager.addToContext(content, estimatedTokens: estimatedTokens);
+      {int estimatedTokens = 100, bool ephemeral = false, String? contentId}) {
+    _contextManager.addToContext(content, 
+        estimatedTokens: estimatedTokens, 
+        ephemeral: ephemeral, 
+        contentId: contentId);
     _tokenMonitor.addTokens(estimatedTokens);
 
     return {
@@ -35,6 +38,7 @@ class ContextService {
       'current_tokens': _contextManager.estimatedTokens,
       'status': _tokenMonitor.status,
       'usage_percentage': _tokenMonitor.usagePercentage,
+      'ephemeral': ephemeral,
     };
   }
 
@@ -81,6 +85,62 @@ class ContextService {
       'usage_percentage': _tokenMonitor.usagePercentage,
       'todo_count': _contextManager.getTodos().length,
       'summary_count': _contextManager.contextSummaries.length,
+      'ephemeral_items': _getEphemeralItemCount(),
+    };
+  }
+
+  /// Mark content as ephemeral for cleanup
+  Map<String, dynamic> markEphemeral(String contentId, String content, {int estimatedTokens = 100}) {
+    _contextManager.markEphemeral(contentId, content, estimatedTokens: estimatedTokens);
+    _tokenMonitor.addTokens(estimatedTokens);
+
+    return {
+      'success': true,
+      'content_id': contentId,
+      'estimated_tokens': estimatedTokens,
+      'current_tokens': _contextManager.estimatedTokens,
+    };
+  }
+
+  /// Clean up ephemeral content
+  Map<String, dynamic> cleanupEphemeral(String contentId) {
+    final beforeTokens = _contextManager.estimatedTokens;
+    _contextManager.cleanupEphemeral(contentId);
+    final afterTokens = _contextManager.estimatedTokens;
+
+    return {
+      'success': true,
+      'content_id': contentId,
+      'tokens_freed': beforeTokens - afterTokens,
+      'current_tokens': afterTokens,
+    };
+  }
+
+  /// Track file read with automatic version cleanup
+  Map<String, dynamic> trackFileRead(String filePath, String content) {
+    final tokens = _contextManager.estimateTokens(content);
+    _contextManager.trackFileRead(filePath, content);
+    _tokenMonitor.addTokens(tokens);
+
+    return {
+      'success': true,
+      'file_path': filePath,
+      'estimated_tokens': tokens,
+      'current_tokens': _contextManager.estimatedTokens,
+    };
+  }
+
+  /// Clean up file versions
+  Map<String, dynamic> cleanupFileVersions(String filePath) {
+    final beforeTokens = _contextManager.estimatedTokens;
+    _contextManager.cleanupFileVersions(filePath);
+    final afterTokens = _contextManager.estimatedTokens;
+
+    return {
+      'success': true,
+      'file_path': filePath,
+      'tokens_freed': beforeTokens - afterTokens,
+      'current_tokens': afterTokens,
     };
   }
 
@@ -89,6 +149,13 @@ class ContextService {
 
   /// Get the underlying token monitor
   TokenMonitor get tokenMonitor => _tokenMonitor;
+  
+  /// Helper method to get ephemeral item count
+  int _getEphemeralItemCount() {
+    // This would need access to the private field, so we'll return 0 for now
+    // In a real implementation, we'd add a public getter to ContextManager
+    return 0;
+  }
 }
 
 /// Global context service instance

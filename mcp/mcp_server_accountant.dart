@@ -4016,6 +4016,7 @@ Clean business name:''';
   }
 
   /// 🤖 **AI MATCH SELECTION**: Use AI to select the best match from candidates
+  // ignore: unused_element
   Future<Map<String, dynamic>?> _aiSelectBestMatch(
     String transactionDescription,
     String aiGuessedName,

@@ -146,12 +146,13 @@ class TerminalMCPServer extends BaseMCPServer {
 
     // 🚫 CRITICAL DANGER PATTERNS - ABSOLUTELY BLOCK THESE
     final criticalDangerPatterns = [
-      RegExp(r'rm\s+(-rf|--recursive\s+--force)\s+/(\s|\$)'), // rm -rf /
-      RegExp(r'rm\s+-rf\s+/(etc|usr|var|lib|bin|sbin|home|root)'), // system dirs
-      RegExp(r':\(\s*\)\s*{\s*\|\s*:&\s*}\s*;\s*:'), // fork bomb
-      RegExp(r'dd\s+if=/dev/\w+\s+of=/dev/\w+'), // disk destruction
-      RegExp(r'mkfs\s+.*/dev/'), // filesystem destruction
-      RegExp(r'sudo\s+rm\s+-rf\s+/'), // privileged destruction
+      RegExp(r'rm\\s+(-rf|--recursive\\s+--force)\\s+/(\\s|$)'), // rm -rf /
+      RegExp(
+          r'rm\\s+-rf\\s+/(etc|usr|var|lib|bin|sbin|home|root)'), // system dirs
+      RegExp(r':\\(\\s*\\)\\s*{\\s*\\|\\s*:&\\s*}\\s*;\\s*:'), // fork bomb
+      RegExp(r'dd\\s+if=/dev/\\w+\\s+of=/dev/\\w+'), // disk destruction
+      RegExp(r'mkfs\\s+.*/dev/'), // filesystem destruction
+      RegExp(r'sudo\\s+rm\\s+-rf\\s+/'), // privileged destruction
     ];
 
     for (final pattern in criticalDangerPatterns) {
@@ -165,21 +166,21 @@ class TerminalMCPServer extends BaseMCPServer {
 
     // ✅ ALLOWED PATTERNS - DEVELOPMENT COMMANDS
     final allowedPatterns = [
-      RegExp(r'^cd\s'), // directory navigation
-      RegExp(r'^ls\s'), // listing
-      RegExp(r'^dart\s'), // dart tools
-      RegExp(r'^flutter\s'), // flutter tools
-      RegExp(r'^git\s'), // git commands
-      RegExp(r'^npm\s'), // npm commands
-      RegExp(r'^yarn\s'), // yarn commands
-      RegExp(r'^python\s'), // python
-      RegExp(r'^node\s'), // node
-      RegExp(r'^echo\s'), // echo
-      RegExp(r'^cat\s'), // cat
-      RegExp(r'^grep\s'), // grep
-      RegExp(r'^find\s'), // find
+      RegExp(r'^cd\\s'), // directory navigation
+      RegExp(r'^ls\\s'), // listing
+      RegExp(r'^dart\\s'), // dart tools
+      RegExp(r'^flutter\\s'), // flutter tools
+      RegExp(r'^git\\s'), // git commands
+      RegExp(r'^npm\\s'), // npm commands
+      RegExp(r'^yarn\\s'), // yarn commands
+      RegExp(r'^python\\s'), // python
+      RegExp(r'^node\\s'), // node
+      RegExp(r'^echo\\s'), // echo
+      RegExp(r'^cat\\s'), // cat
+      RegExp(r'^grep\\s'), // grep
+      RegExp(r'^find\\s'), // find
       RegExp(r'^pwd'), // pwd
-      RegExp(r'^which\s'), // which
+      RegExp(r'^which\\s'), // which
     ];
 
     for (final pattern in allowedPatterns) {

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:ai_accounting/services/services.dart';
+import 'package:ai_accounting/services/transaction_categorizer.dart';
 import 'package:dart_openai_client/dart_openai_client.dart';
 import 'package:path/path.dart' as path;
 
@@ -32,6 +33,7 @@ Future<void> main() async {
       ApiClient(baseUrl: "https://api.deepseek.com/v1", apiKey: apiKey);
   final toolRegistry = McpToolExecutorRegistry(mcpConfig: mcpConfig);
   await toolRegistry.initialize();
+  _verifyRequiredTools(toolRegistry);
 
   // Ensure config files exist, create if missing
   _ensureConfigFilesExist();
@@ -119,19 +121,12 @@ Future<void> main() async {
 
         // Simple account mapping based on transaction type and supplier info
         if (isIncomeTransaction) {
-          // Income transactions - use revenue accounts (100-150)
-          if (supplies.toLowerCase().contains('customer') ||
-              supplies.toLowerCase().contains('payment')) {
-            newAccountCode = '100'; // Sales Revenue
-            justification = 'Customer payment for products or services';
-          } else if (supplies.toLowerCase().contains('processing') ||
-              supplies.toLowerCase().contains('payment')) {
-            newAccountCode = '150'; // Other Income
-            justification = 'Payment processing income';
-          } else {
-            newAccountCode = '100'; // Default to Sales Revenue for income
-            justification = 'Revenue from $supplierName';
-          }
+          final incomeDecision = categorizeIncomeTransaction(
+            supplierName: supplierName,
+            suppliesDescription: supplies,
+          );
+          newAccountCode = incomeDecision.accountCode;
+          justification = incomeDecision.justification;
         } else {
           // Expense transactions - use expense accounts (300-400)
           if (supplies.toLowerCase().contains('software') ||
@@ -260,5 +255,25 @@ void _ensureConfigFilesExist() {
     accountingRulesFile.writeAsStringSync(
         'No specific accounting rules defined yet.\nUse the Accountant MCP Server to add institutional knowledge for better transaction categorization.');
     print('📝 Created accounting rules file: $accountingRulesPath');
+  }
+}
+
+/// Validates that all required MCP tools are registered before categorisation.
+void _verifyRequiredTools(McpToolExecutorRegistry registry) {
+  const requiredTools = <String>{
+    'match_supplier_fuzzy',
+    'update_transaction_account',
+  };
+
+  final missingTools = requiredTools
+      .where((toolName) => !registry.executors.containsKey(toolName))
+      .toList();
+
+  if (missingTools.isNotEmpty) {
+    final missingList = missingTools.join(', ');
+    throw Exception(
+      'Required MCP tools missing: $missingList. '
+      'Ensure the accountant MCP server is registered in config/mcp_servers.json.',
+    );
   }
 }

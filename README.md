@@ -1,61 +1,44 @@
 # AI Accounting
 
-## ⚡️ Agent-Based AI Infrastructure (2024 Refactor)
+Modern AI-assisted bookkeeping toolkit built in Dart. The project pairs a suite of MCP servers (accountant, terminal, context manager, filesystem, Dart) with command-line agents that categorise transactions, investigate suppliers, and keep the general journal in sync with business rules.
 
-This project now uses the [dart-openai-client](../dart-openai-client) agent-based architecture for all AI-driven accounting features. The legacy AI batching, prompt, and DeepseekClient infrastructure has been **completely removed**.
+## Key Features
+- **Agent-based categorisation** – `bin/categorise_transactions.dart` finds uncategorised entries and applies updates through MCP tools such as `match_supplier_fuzzy` and `update_transaction_account`.
+- **Accountant MCP server** – exposes supplier CRUD, fuzzy matching, transaction search/update, and report regeneration while enforcing GST and bank-account protections.
+- **Secure terminal access** – the terminal MCP server executes vetted shell commands with blacklisted patterns, working-directory guardrails, and timeouts.
+- **Context-aware utilities** – the context-manager server keeps long-running sessions within token budgets.
+- **Rich test suite** – targeted regression tests cover chart of accounts, supplier management, MCP timeouts, and the accountant server workflows.
 
-### Key Integration Points
-- All AI categorization is performed via an `Agent` (see `bin/run.dart`).
-- The agent is initialized with:
-  - `ApiClient` (OpenAI/DeepSeek API)
-  - `McpToolExecutorRegistry` (tool registry)
-  - A comprehensive system prompt (includes chart of accounts, suppliers, company profile)
-- All bank statement lines are batched and sent to the agent for categorization.
-- Results are parsed and mapped to transactions for downstream reporting.
+## Getting Started
+1. Install Dart 3.x and run `dart pub get`.
+2. Export your DeepSeek/OpenAI key: `export DEEPSEEK_API_KEY=sk-...`.
+3. Verify MCP config: `config/mcp_servers.json` should include every server you want to run (accountant requires local file access to `inputs/` and `data/`).
 
-### Dependency
-- `dart_openai_client` (see `pubspec.yaml`)
+### Running the categorisation workflow
+```bash
+dart run bin/categorise_transactions.dart
+```
+This command loads uncategorised journal entries (account `999`), queries the accountant MCP server for supplier matches, and issues `update_transaction_account` calls with annotated notes.
 
----
+### Other entry points
+- `dart run bin/accounting_agent_ui.dart` – conversational investigation assistant for accountants.
+- `dart run bin/ai_coding_assistant.dart` / `dart run bin/life_coach_ui.dart` – developer-focused interactive shells that share the same MCP registry.
 
-## [Agent Integration] CONQUEST REPORT
+## Testing & Linting
+```bash
+dart analyze
+dart test                  # entire suite
+dart test path/to/test.dart # focused run
+```
+Helper scripts (`run_directory_test.sh`, `run_fix_test.sh`, `run_security_test.sh`) provide targeted checks for directories, fixes, and terminal security respectively.
 
-### 🏆 MISSION ACCOMPLISHED
-Legacy AI infrastructure was eliminated and replaced with a modern, agent-based architecture using `dart-openai-client`. All categorization, batching, and prompt logic is now handled by the agent, ensuring maintainability, extensibility, and testability.
+## Documentation
+- `docs/ARCHITECTURE.md` – MCP servers, entry points, and operational notes.
+- `INSTRUCTIONS.md` – business-specific transaction categorisation rules.
+- `test/README.md` – structure of the MCP-focused test suites.
 
-### ⚔️ STRATEGIC DECISIONS
-| Option                | Power-Ups                        | Weaknesses                | Victory Reason                |
-|-----------------------|----------------------------------|---------------------------|-------------------------------|
-| Legacy AI batching    | Familiar, already integrated     | Hard to maintain, brittle | Obsolete, not scalable        |
-| Agent-based (chosen)  | Modular, scalable, testable      | Requires refactor         | Industry best-practice, future-proof |
-
-### 💀 BOSS FIGHTS DEFEATED
-1. **Legacy AI Coupling**
-   - 🔍 Symptom: AI logic scattered, hard to test/extend
-   - 🎯 Root Cause: Tight coupling of batching, prompt, and HTTP logic
-   - 💥 Kill Shot: Removed all legacy services, replaced with agent abstraction
-2. **Linter/Test Fortress**
-   - 🔍 Symptom: Linter errors, test failures after refactor
-   - 🎯 Root Cause: Missing dependencies, style issues, config drift
-   - 💥 Kill Shot: Added missing deps, sorted imports, fixed all info-level issues
-
-### ⚡ IMPLEMENTATION WARFARE RULES
-- Modular, DRY, single-responsibility components
-- All secrets/config via environment variables
-- No hardcoded credentials or magic numbers
-- Strong typing throughout (no Map<String, dynamic> returns)
-- 100% linter/test pass required for merge
-
-### 🎮 USAGE SCENARIOS
-- **Batch Categorization:** All bank statement lines are sent to the agent for categorization in a single call.
-- **Tool-Filtered Agent:** Only the required tools (e.g., `puppeteer_navigate`) are enabled for the agent.
-- **Config-Driven:** Chart of accounts, suppliers, and company profile are loaded from config files and injected into the agent prompt.
-
-### 🏰 PERMANENT TEST FORTRESS
-- All tests pass (`dart test`)
-- Linter is 100% clean (`dart analyze`)
-- No temporary or diagnostic tests remain
-
----
-
-# See `bin/run.dart` for the main entry point and agent integration example.
+## Current Action Plan
+1. **Align categorisation logic with the chart of accounts** – update mapping rules in `bin/categorise_transactions.dart`/`lib/services/transaction_categorizer.dart`, add tests that assert every suggested code exists in `inputs/accounts.json`.
+2. **End-to-end MCP workflow validation** – script a happy-path test that runs the categoriser against fixture data while the accountant server is live, capturing tool calls and results.
+3. **Performance & resilience review** – profile the fuzzy-supplier flow, add caching where it reduces duplicate tool calls, and document timeout budgets per server (accountant already uses a 15 s discovery window).
+4. **Security & ergonomics polish** – run the security/directory helper scripts, document required environment variables, and make sure contributors know how the shared `Services` singleton is initialised when launching scripts/tests.

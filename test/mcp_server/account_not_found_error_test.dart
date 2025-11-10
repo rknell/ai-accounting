@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:ai_accounting/models/account.dart';
 import 'package:ai_accounting/services/services.dart';
 import 'package:dart_openai_client/dart_openai_client.dart';
+import 'package:get_it/get_it.dart';
 import 'package:test/test.dart';
 
 import '../../mcp/mcp_server_accountant.dart';
@@ -33,6 +34,11 @@ void main() {
     setUpAll(() async {
       // 🚀 Initialize test environment
       services = Services(testMode: true);
+      final getIt = GetIt.instance;
+      if (getIt.isRegistered<Services>()) {
+        getIt.unregister<Services>();
+      }
+      getIt.registerSingleton<Services>(services);
 
       // Add some test accounts to the chart of accounts (check if they exist first)
       final testAccounts = [
@@ -67,13 +73,10 @@ void main() {
         ),
       ];
 
+      final chartService = services.chartOfAccounts;
       for (final account in testAccounts) {
-        try {
-          services.chartOfAccounts.addAccount(account);
-        } catch (e) {
-          // Account might already exist, which is fine for testing
-          print('Account ${account.code} already exists: $e');
-        }
+        // Inject accounts directly into the in-memory chart without persisting to disk
+        chartService.accounts[account.code] = account;
       }
 
       server = AccountantMCPServer(
@@ -89,6 +92,10 @@ void main() {
 
     tearDownAll(() async {
       await server.shutdown();
+      final getIt = GetIt.instance;
+      if (getIt.isRegistered<Services>()) {
+        getIt.unregister<Services>();
+      }
     });
 
     group('🔍 Search Transactions by Account', () {
@@ -100,7 +107,7 @@ void main() {
               .firstWhere((t) => t.name == 'search_transactions_by_account');
 
           await tool.callback!({
-            'accountCode': '999', // Non-existent account
+            'accountCode': '888', // Non-existent account
             'limit': 10,
           });
 
@@ -122,7 +129,7 @@ void main() {
           final errorJson = jsonDecode(jsonMatch!.group(0)!);
           expect(errorJson, isA<Map<String, dynamic>>());
           expect(errorJson['error'],
-              equals('Account not in chart of accounts: 999'));
+              equals('Account not in chart of accounts: 888'));
           expect(
               errorJson['message'],
               equals(
@@ -407,7 +414,7 @@ void main() {
               .firstWhere((t) => t.name == 'search_transactions_by_account');
 
           await tool.callback!({
-            'accountCode': '999',
+            'accountCode': '888',
             'limit': 10,
           });
 
