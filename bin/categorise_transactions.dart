@@ -128,36 +128,12 @@ Future<void> main() async {
           newAccountCode = incomeDecision.accountCode;
           justification = incomeDecision.justification;
         } else {
-          // Expense transactions - use expense accounts (300-400)
-          if (supplies.toLowerCase().contains('software') ||
-              supplies.toLowerCase().contains('cloud') ||
-              supplies.toLowerCase().contains('development') ||
-              supplies.toLowerCase().contains('subscription')) {
-            newAccountCode = '400'; // Software & Technology
-            justification = 'Software and technology expense';
-          } else if (supplies.toLowerCase().contains('fuel') ||
-              supplies.toLowerCase().contains('vehicle') ||
-              supplies.toLowerCase().contains('transport')) {
-            newAccountCode = '350'; // Vehicle & Transport
-            justification = 'Vehicle and transport expense';
-          } else if (supplies.toLowerCase().contains('utility') ||
-              supplies.toLowerCase().contains('electricity') ||
-              supplies.toLowerCase().contains('power')) {
-            newAccountCode = '301'; // Utilities
-            justification = 'Utility expense';
-          } else if (supplies.toLowerCase().contains('bank') ||
-              supplies.toLowerCase().contains('fee') ||
-              supplies.toLowerCase().contains('currency')) {
-            newAccountCode = '308'; // Bank Fees
-            justification = 'Bank fees and charges';
-          } else if (supplies.toLowerCase().contains('rent') ||
-              supplies.toLowerCase().contains('property')) {
-            newAccountCode = '300'; // Rent & Property
-            justification = 'Rent and property expense';
-          } else {
-            newAccountCode = '350'; // General Business Expenses
-            justification = 'General business expense for $supplies';
-          }
+          final expenseDecision = categorizeExpenseTransaction(
+            supplierName: supplierName,
+            suppliesDescription: supplies,
+          );
+          newAccountCode = expenseDecision.accountCode;
+          justification = expenseDecision.justification;
         }
 
         // Step 3: Update the transaction account if we have a valid mapping
