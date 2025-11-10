@@ -35,6 +35,11 @@ All entry points share the same setup pattern:
 - `ChartOfAccountsService` and `GeneralJournalService` respect the `AI_ACCOUNTING_INPUTS_DIR`/`AI_ACCOUNTING_DATA_DIR` overrides, which keeps integration tests and temp fixtures isolated from production data.
 - When writing tests that need custom behaviour, register your own `Services(testMode: true)` with GetIt, or override specific services before invoking MCP handlers.
 
+## Code Organization Guidelines
+- Avoid ad-hoc Dart scripts in the repository root. If you need to exercise behaviour, add a proper unit/integration test under `test/`.
+- Tooling/maintenance scripts belong in `tools/`; wire them into CI as needed.
+- Consumer-facing entry points belong in `bin/` so they can be invoked via `dart run`.
+
 ## Terminal Security Snapshot
 - **Allowed**: typical developer tooling (`git`, `dart`, `ls`, etc.).
 - **Blocked**: destructive commands (`rm -rf /`, `dd if=/dev/...`, privilege-escalation helpers) and any command outside the configured working-tree.
