@@ -12,6 +12,8 @@ part 'general_journal.g.dart';
 /// to specific accounts, maintaining the accounting equation (Assets = Liabilities + Equity)
 @JsonSerializable()
 class GeneralJournal {
+  /// When true, skips expensive chart-of-accounts validation (used during bulk loads).
+  static bool disableAccountValidation = false;
   /// The date when the transaction occurred
   final DateTime date;
 
@@ -111,20 +113,22 @@ class GeneralJournal {
           'Debits (\$${debitTotal.toStringAsFixed(2)}) and credits (\$${creditTotal.toStringAsFixed(2)}) must balance');
     }
 
-    // Validate that all accounts exist in the chart of accounts
-    for (var debit in debits) {
-      final account = services.chartOfAccounts.getAccount(debit.accountCode);
-      if (account == null) {
-        throw Exception(
-            'Debit account with code "${debit.accountCode}" does not exist in the chart of accounts.');
+    if (!disableAccountValidation) {
+      // Validate that all accounts exist in the chart of accounts
+      for (var debit in debits) {
+        final account = services.chartOfAccounts.getAccount(debit.accountCode);
+        if (account == null) {
+          throw Exception(
+              'Debit account with code "${debit.accountCode}" does not exist in the chart of accounts.');
+        }
       }
-    }
 
-    for (var credit in credits) {
-      final account = services.chartOfAccounts.getAccount(credit.accountCode);
-      if (account == null) {
-        throw Exception(
-            'Credit account with code "${credit.accountCode}" does not exist in the chart of accounts.');
+      for (var credit in credits) {
+        final account = services.chartOfAccounts.getAccount(credit.accountCode);
+        if (account == null) {
+          throw Exception(
+              'Credit account with code "${credit.accountCode}" does not exist in the chart of accounts.');
+        }
       }
     }
   }

@@ -9,6 +9,7 @@ void main() {
     late Directory tempDir;
     late Directory tempInputsDir;
     late Directory tempDataDir;
+    late String tempCompanyFilePath;
 
     setUpAll(() {
       tempDir = Directory.systemTemp.createTempSync('categorise_cli_test_');
@@ -16,6 +17,7 @@ void main() {
         ..createSync(recursive: true);
       tempDataDir = Directory(p.join(tempDir.path, 'data'))
         ..createSync(recursive: true);
+      tempCompanyFilePath = p.join(tempDataDir.path, 'company_file.json');
 
       _copyFile(
           'inputs/accounts.json', p.join(tempInputsDir.path, 'accounts.json'));
@@ -83,6 +85,47 @@ void main() {
       File(p.join(tempDataDir.path, 'general_journal.json')).writeAsStringSync(
           const JsonEncoder.withIndent('  ').convert(sampleJournal));
 
+      final accountsJson = jsonDecode(
+          File(p.join(tempInputsDir.path, 'accounts.json')).readAsStringSync()) as List<dynamic>;
+
+      final companyProfile = <String, Object>{
+        'name': 'Test Company',
+        'industry': 'AI Accounting QA',
+        'location': 'Test Lab',
+        'founder': 'QA Bot',
+        'mission': 'Ensure categorisation works',
+        'products': ['Accuracy'],
+        'keyPurchases': ['Test Fixtures'],
+        'sustainabilityPractices': <String>[],
+        'communityValues': <String>[],
+        'uniqueSellingPoints': <String>[],
+        'accountingConsiderations': <String>[],
+      };
+
+      final metadata = {
+        'version': '1.0.0',
+        'createdAt': DateTime.now().toIso8601String(),
+        'modifiedAt': DateTime.now().toIso8601String(),
+        'fileSize': 0,
+        'checksum': 'test',
+        'lastBackup': null,
+        'backupCount': 0,
+      };
+
+      final companyFile = <String, Object?>{
+        'id': 'test_company_file',
+        'profile': companyProfile,
+        'accounts': accountsJson,
+        'generalJournal': sampleJournal,
+        'accountingRules': <Object>[],
+        'suppliers': jsonDecode(
+            File(p.join(tempInputsDir.path, 'supplier_list.json')).readAsStringSync()),
+        'metadata': metadata,
+      };
+
+      File(tempCompanyFilePath)
+          .writeAsStringSync(const JsonEncoder.withIndent('  ').convert(companyFile));
+
       final result = await Process.run(
         'dart',
         ['run', 'bin/categorise_transactions.dart'],
@@ -92,6 +135,7 @@ void main() {
               Platform.environment['DEEPSEEK_API_KEY'] ?? 'test-api-key',
           'AI_ACCOUNTING_INPUTS_DIR': tempInputsDir.path,
           'AI_ACCOUNTING_DATA_DIR': tempDataDir.path,
+          'AI_ACCOUNTING_COMPANY_FILE': tempCompanyFilePath,
         },
       );
 

@@ -32,6 +32,9 @@ class CompanyFileService {
   /// Flag indicating if data has been loaded
   bool _isLoaded = false;
 
+  /// Path to the currently loaded/saved company file
+  String? _currentFilePath;
+
   /// Default constructor
   CompanyFileService({bool testMode = false}) : _testMode = testMode;
 
@@ -40,6 +43,78 @@ class CompanyFileService {
 
   /// Checks if a company file is currently loaded
   bool get isLoaded => _isLoaded && _currentCompanyFile != null;
+
+  /// Returns the currently loaded company file path, if any
+  String? get currentFilePath => _currentFilePath;
+
+  /// Default path for the unified company file
+  String get defaultCompanyFilePath =>
+      Platform.environment['AI_ACCOUNTING_COMPANY_FILE'] ??
+      'data/company_file.json';
+
+  /// Indicates whether a persisted company file already exists
+  bool get hasPersistedCompanyFile =>
+      File(defaultCompanyFilePath).existsSync();
+
+  /// Ensures the unified company file is available (migrating if needed)
+  bool ensureCompanyFileReady({String? filePath}) {
+    if (isLoaded) {
+      return true;
+    }
+
+    final resolvedPath = filePath ?? defaultCompanyFilePath;
+    _currentFilePath = resolvedPath;
+
+    if (_testMode) {
+      print('🛡️ TEST MODE: Skipping automatic company file loading');
+      return false;
+    }
+
+    final file = File(resolvedPath);
+    if (file.existsSync()) {
+      return loadCompanyFile(resolvedPath);
+    }
+
+    print('📦 Unified company file not found at $resolvedPath.');
+    print('🔄 Attempting migration from individual inputs/data directories...');
+    final migrated = migrateFromIndividualFiles();
+    if (!migrated) {
+      print('❌ Migration failed – continuing to use legacy files.');
+      return false;
+    }
+
+    return saveCompanyFile(resolvedPath);
+  }
+
+  /// Persists the in-memory company file using the current/default path
+  bool saveCurrentCompanyFile() {
+    if (_testMode) {
+      print('🛡️ TEST MODE: Skipping company file save');
+      return true;
+    }
+
+    final targetPath = _currentFilePath ?? defaultCompanyFilePath;
+    _currentFilePath = targetPath;
+    return saveCompanyFile(targetPath);
+  }
+
+  /// Updates the current company file via [updater] and persists it
+  bool updateCompanyFile(CompanyFile Function(CompanyFile current) updater,
+      {bool persist = true}) {
+    if (_currentCompanyFile == null) {
+      print('❌ No company file loaded to update');
+      return false;
+    }
+
+    _currentCompanyFile = updater(_currentCompanyFile!);
+    _isLoaded = true;
+
+    if (!persist || _testMode) {
+      return true;
+    }
+
+    return saveCurrentCompanyFile();
+  }
 
   /// Loads a company file from the specified path
   ///
@@ -60,7 +135,13 @@ class CompanyFileService {
       final jsonString = file.readAsStringSync();
       final jsonMap = jsonDecode(jsonString) as Map<String, dynamic>;
 
-      _currentCompanyFile = CompanyFile.fromJson(jsonMap);
+      final previousValidationState = GeneralJournal.disableAccountValidation;
+      GeneralJournal.disableAccountValidation = true;
+      try {
+        _currentCompanyFile = CompanyFile.fromJson(jsonMap);
+      } finally {
+        GeneralJournal.disableAccountValidation = previousValidationState;
+      }
 
       // Validate the loaded data
       final validationErrors = _currentCompanyFile!.validate();
@@ -72,6 +153,7 @@ class CompanyFileService {
         // Don't fail completely, but warn about issues
       }
 
+      _currentFilePath = filePath;
       _isLoaded = true;
       print(
           '✅ Company file loaded successfully: ${_currentCompanyFile!.profile.name}');
@@ -98,6 +180,8 @@ class CompanyFileService {
     }
 
     try {
+      _currentFilePath = filePath;
+
       // Create backup before saving
       _createBackup(filePath);
 
@@ -122,7 +206,14 @@ class CompanyFileService {
       }
 
       // Convert to JSON and save
-      final jsonString = jsonEncode(updatedCompanyFile.toJson());
+      final previousValidationState = GeneralJournal.disableAccountValidation;
+      GeneralJournal.disableAccountValidation = true;
+      late final String jsonString;
+      try {
+        jsonString = jsonEncode(updatedCompanyFile.toJson());
+      } finally {
+        GeneralJournal.disableAccountValidation = previousValidationState;
+      }
       final file = File(filePath);
 
       // Ensure directory exists
@@ -735,6 +826,3 @@ class CompanyFileService {
     return buffer.toString();
   }
 }
-
-
-

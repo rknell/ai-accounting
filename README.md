@@ -13,6 +13,13 @@ Modern AI-assisted bookkeeping toolkit built in Dart. The project pairs a suite 
 1. Install Dart 3.x and run `dart pub get`.
 2. Export your DeepSeek/OpenAI key: `export DEEPSEEK_API_KEY=sk-...`.
 3. Verify MCP config: `config/mcp_servers.json` should include every server you want to run (accountant requires local file access to `inputs/` and `data/`).
+4. (Optional) Point `AI_ACCOUNTING_COMPANY_FILE` at the unified JSON file you want to use. When absent, the tooling will auto-create `data/company_file.json` by migrating the legacy `inputs/` + `data/` resources.
+
+### Single-file company data
+- `CompanyFileService` now keeps the chart of accounts, general journal, suppliers, rules, and company profile inside a single JSON snapshot (default: `data/company_file.json`).
+- Set `AI_ACCOUNTING_COMPANY_FILE=/path/to/MyCompany.json` to isolate multiple books on the same machine.
+- Existing services (`ChartOfAccountsService`, `GeneralJournalService`, importer scripts) read/write through the unified file first and only fall back to the legacy directories if migration fails.
+- Regenerate or refresh the company file at any time via `dart run bin/migrate_to_company_file.dart`; backups land in `data/backups/` before every save.
 
 ### Running the categorisation workflow
 ```bash
@@ -30,6 +37,7 @@ dart analyze
 dart test                  # entire suite
 dart test path/to/test.dart # focused run
 ```
+> 🧪 **Policy**: every new feature or bugfix must land with unit/integration tests. Write the failing test first, implement the fix, and keep the suite green before opening a PR.
 Helper scripts (in `tools/`) provide lightweight guardrails:
 - `./tools/run_directory_test.sh` – validates that `inputs/`, `data/`, and `config/` exist and that their JSON files are well-formed.
 - `./tools/run_fix_test.sh` – ensures the formatter, analyzer, and fix-oriented unit tests are clean.

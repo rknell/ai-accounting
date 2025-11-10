@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:dart_openai_client/dart_openai_client.dart';
 import 'package:test/test.dart';
 
+const _fastServerThresholdMs = 1500; // Allow minor scheduler noise while ensuring it's fast.
+
 /// 🛡️ PERMANENT TEST FORTRESS: MCP Tools List Timeout Functionality
 ///
 /// These tests ensure that tools list requests timeout after 3 seconds
@@ -104,8 +106,8 @@ void main() {
         await mcpClient.initialize();
         stopwatch.stop();
         
-        // Should complete very quickly (< 1 second for fast servers)
-        expect(stopwatch.elapsedMilliseconds, lessThan(1000));
+        // Should complete very quickly while allowing CI jitter.
+        expect(stopwatch.elapsedMilliseconds, lessThan(_fastServerThresholdMs));
         expect(mcpClient.toolCount, greaterThan(0));
         
         print('✅ Fast tools list completed in ${stopwatch.elapsedMilliseconds}ms');

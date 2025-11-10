@@ -56,6 +56,14 @@ validate_json "inputs/supplier_list.json" "Supplier list"
 validate_json "data/general_journal.json" "General journal"
 validate_json "config/mcp_servers.json" "MCP server configuration"
 
+COMPANY_FILE_PATH="${AI_ACCOUNTING_COMPANY_FILE:-data/company_file.json}"
+if [[ -f "$COMPANY_FILE_PATH" ]]; then
+  validate_json "$COMPANY_FILE_PATH" "Unified company file"
+else
+  echo "❌ Unified company file missing: $COMPANY_FILE_PATH (run bin/migrate_to_company_file.dart or set AI_ACCOUNTING_COMPANY_FILE)"
+  failures=1
+fi
+
 if [[ ! -f "inputs/accounting_rules.txt" ]]; then
   echo "❌ Missing accounting rules file: inputs/accounting_rules.txt"
   failures=1

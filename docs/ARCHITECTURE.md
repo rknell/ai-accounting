@@ -3,8 +3,9 @@
 This project combines AI-powered categorisation with a suite of Model Context Protocol (MCP) servers. The goal of this document is to keep the essentials in one place so you can understand how the pieces fit together without chasing multiple guides.
 
 ## Data & Configuration
-- **Company data** lives in `inputs/` (chart of accounts, suppliers, accounting rules, company profile) and `data/` (general journal). `CompanyFileService` loads these resources, provides validation, and can export/import combined snapshots.
-- **Overrides**: set `AI_ACCOUNTING_INPUTS_DIR`, `AI_ACCOUNTING_DATA_DIR`, or `AI_ACCOUNTING_CONFIG_DIR` to point the tooling at alternate working directories (useful for fixtures/tests). When unset, binaries fall back to the repo defaults.
+- **Unified company file**: all live accounting data (chart of accounts, suppliers, accounting rules, company profile, and general journal) is stored in a single JSON snapshot. The default path is `data/company_file.json`, overridable via `AI_ACCOUNTING_COMPANY_FILE`.
+- **Automatic migration**: on startup `CompanyFileService.ensureCompanyFileReady()` loads the configured JSON. If it is missing, the service migrates from the legacy `inputs/` / `data/` files, writes the new snapshot, and continues. Backups land in `data/backups/` before every save.
+- **Legacy overrides**: `AI_ACCOUNTING_INPUTS_DIR`, `AI_ACCOUNTING_DATA_DIR`, and `AI_ACCOUNTING_CONFIG_DIR` are still honoured so fixtures/tests can point at custom directories. When the unified file is unavailable or migration fails, services fall back to these directories transparently.
 - **Environment**: set `DEEPSEEK_API_KEY` before running any agent entry point. Additional MCP-specific environment variables can be set inside `config/mcp_servers.json`.
 - **MCP registry**: `config/mcp_servers.json` lists all servers. Each entry maps directly to a `McpServerConfig` used by `McpToolExecutorRegistry`.
 
@@ -32,7 +33,7 @@ All entry points share the same setup pattern:
 
 ## Shared Services
 - The `services` getter in `lib/services/services.dart` lazily registers a `Services` singleton with GetIt. Access services through this getter so MCP servers, entry points, and tests share the same instances.
-- `ChartOfAccountsService` and `GeneralJournalService` respect the `AI_ACCOUNTING_INPUTS_DIR`/`AI_ACCOUNTING_DATA_DIR` overrides, which keeps integration tests and temp fixtures isolated from production data.
+- `ChartOfAccountsService` and `GeneralJournalService` now load/save through the unified company file first, falling back to the legacy directories only when the file is unavailable. They still respect the `AI_ACCOUNTING_INPUTS_DIR`/`AI_ACCOUNTING_DATA_DIR` overrides so integration tests and fixtures stay isolated.
 - When writing tests that need custom behaviour, register your own `Services(testMode: true)` with GetIt, or override specific services before invoking MCP handlers.
 
 ## Code Organization Guidelines
@@ -55,5 +56,6 @@ All entry points share the same setup pattern:
 - Static analysis: `dart analyze`
 - Unit/integration tests: `dart test` (full suite) or granular targets under `test/mcp_server/` and `test/models/`
 - Helper scripts (in `tools/`): `run_directory_test.sh`, `run_fix_test.sh`, `run_security_test.sh`
+- **Rule of thumb**: no feature or regression fix ships without automated tests covering the behaviour; treat failing tests as the signal to code, not the other way around.
 
 Keep this file up to date whenever you add/remove an MCP server, change data locations, or introduce new entry points. EOF

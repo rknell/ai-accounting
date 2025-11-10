@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:ai_accounting/models/account.dart';
+import 'package:ai_accounting/services/company_file_service.dart';
 import 'package:path/path.dart' as p;
 
 /// Service that provides access to chart of accounts data
@@ -9,14 +10,16 @@ class ChartOfAccountsService {
   /// Creates a chart-of-accounts service that reads from [inputsDirectory] or
   /// falls back to the project `inputs/` directory (overridable via
   /// `AI_ACCOUNTING_INPUTS_DIR`).
-  ChartOfAccountsService({String? inputsDirectory})
+  ChartOfAccountsService({String? inputsDirectory, CompanyFileService? companyFileService})
       : _inputsDirectory = inputsDirectory ??
             Platform.environment['AI_ACCOUNTING_INPUTS_DIR'] ??
-            'inputs' {
+            'inputs',
+        _companyFileService = companyFileService {
     loadAccounts();
   }
 
   final String _inputsDirectory;
+  final CompanyFileService? _companyFileService;
 
   /// Map of account code to Account object for quick lookups
   final Map<String, Account> accounts = {};
@@ -26,6 +29,14 @@ class ChartOfAccountsService {
 
   String get _accountsFilePath => p.join(_inputsDirectory, 'accounts.json');
 
+  bool get _shouldUseCompanyFile {
+    final service = _companyFileService;
+    if (service == null) {
+      return false;
+    }
+    return service.isLoaded && service.currentCompanyFile != null;
+  }
+
   /// Loads accounts from the JSON file
   ///
   /// Returns true if successful, false otherwise
@@ -33,6 +44,20 @@ class ChartOfAccountsService {
     if (_isLoaded) return true;
 
     try {
+      if (_shouldUseCompanyFile) {
+        final companyFile = _companyFileService?.currentCompanyFile;
+        if (companyFile == null) {
+          print('❌ Company file not loaded – falling back to legacy inputs');
+        } else {
+          accounts.clear();
+          for (final account in companyFile.accounts) {
+            accounts[account.code] = account;
+          }
+          _isLoaded = true;
+          return true;
+        }
+      }
+
       final file = File(_accountsFilePath);
       final jsonString = file.readAsStringSync();
       final List<dynamic> jsonList = jsonDecode(jsonString) as List<dynamic>;
@@ -96,12 +121,23 @@ class ChartOfAccountsService {
   /// Returns true if successful, false otherwise
   bool saveAccounts() {
     try {
+      final accountsList = accounts.values.toList()
+        ..sort((a, b) => a.code.compareTo(b.code));
+
+      if (_shouldUseCompanyFile) {
+        final updated = _companyFileService?.updateCompanyFile(
+          (companyFile) => companyFile.copyWith(accounts: accountsList),
+        );
+        if (updated == true) {
+          return true;
+        }
+        print(
+            '⚠️  Warning: Unable to persist accounts to company file – falling back to legacy JSON');
+      }
+
       final file = File(_accountsFilePath);
 
       // Convert accounts to list and sort by account code
-      final accountsList = accounts.values.toList();
-      accountsList.sort((a, b) => a.code.compareTo(b.code));
-
       // Convert to JSON
       final jsonString =
           jsonEncode(accountsList.map((a) => a.toJson()).toList());

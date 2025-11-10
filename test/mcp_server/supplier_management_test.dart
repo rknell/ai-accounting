@@ -166,10 +166,11 @@ void main() {
           expect(supplier['supplies'], isA<String>());
           expect(supplier['name'], isNotEmpty);
           expect(supplier['supplies'], isNotEmpty);
-          // Account is optional
-          if (supplier.containsKey('account') == true) {
-            expect(supplier['account'], isA<String>());
-            expect(supplier['account'], isNotEmpty);
+          // Account is optional and may be explicitly null in fixtures.
+          final account = supplier['account'];
+          if (account != null) {
+            expect(account, isA<String>());
+            expect(account, isNotEmpty);
           }
         }
 

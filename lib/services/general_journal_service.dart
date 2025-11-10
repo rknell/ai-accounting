@@ -5,6 +5,7 @@ import 'package:ai_accounting/models/account.dart';
 import 'package:ai_accounting/models/bank_import_models.dart';
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/models/split_transaction.dart';
+import 'package:ai_accounting/services/company_file_service.dart';
 import 'package:ai_accounting/services/environment_service.dart';
 import 'package:ai_accounting/services/services.dart';
 import 'package:path/path.dart' as p;
@@ -21,18 +22,32 @@ class GeneralJournalService {
   final bool _testMode;
 
   final String _dataDirectory;
+  final CompanyFileService? _companyFileService;
 
   /// Default constructor
-  GeneralJournalService({bool testMode = false})
-      : _testMode = testMode,
+  GeneralJournalService({
+    bool testMode = false,
+    CompanyFileService? companyFileService,
+    String? dataDirectory,
+  })  : _testMode = testMode,
         _dataDirectory =
-            Platform.environment['AI_ACCOUNTING_DATA_DIR'] ?? 'data' {
+            dataDirectory ?? Platform.environment['AI_ACCOUNTING_DATA_DIR'] ?? 'data',
+        _companyFileService = companyFileService {
     if (!_testMode) {
+      _companyFileService?.ensureCompanyFileReady();
       loadEntries();
     }
   }
 
   String get _journalFilePath => p.join(_dataDirectory, 'general_journal.json');
+
+  bool get _shouldUseCompanyFile {
+    final service = _companyFileService;
+    if (service == null) {
+      return false;
+    }
+    return service.isLoaded && service.currentCompanyFile != null;
+  }
 
   /// Loads general journal entries from the JSON file
   ///
@@ -41,6 +56,19 @@ class GeneralJournalService {
     if (_isLoaded) return true;
 
     try {
+      if (_shouldUseCompanyFile) {
+        final companyFile = _companyFileService?.currentCompanyFile;
+        if (companyFile == null) {
+          print('❌ Company file not loaded – falling back to general_journal.json');
+        } else {
+          entries
+            ..clear()
+            ..addAll(companyFile.generalJournal);
+          _isLoaded = true;
+          return true;
+        }
+      }
+
       final file = File(_journalFilePath);
 
       // Create the file if it doesn't exist
@@ -86,6 +114,17 @@ class GeneralJournalService {
       final file = File(_journalFilePath);
       // Sort entries in ascending date order before saving
       entries.sort((a, b) => a.date.compareTo(b.date));
+
+      if (_shouldUseCompanyFile) {
+        final persisted = _companyFileService?.updateCompanyFile(
+          (companyFile) =>
+              companyFile.copyWith(generalJournal: List<GeneralJournal>.from(entries)),
+        );
+        if (persisted != true) {
+          print('⚠️  Warning: Unable to persist journal entries to company file');
+        }
+      }
+
       final jsonString = jsonEncode(entries.map((e) => e.toJson()).toList());
       file.writeAsStringSync(jsonString);
 
@@ -102,7 +141,7 @@ class GeneralJournalService {
   /// Exports general journal entries to a CSV file
   void _exportToCsv() {
     try {
-      final csvFile = File('data/general_journal.csv');
+      final csvFile = File(p.join(_dataDirectory, 'general_journal.csv'));
       final buffer = StringBuffer();
 
       // Write header

@@ -45,7 +45,8 @@ class Services {
   /// This getter provides access to the chart of accounts functionality
   /// throughout the application. It is lazily instantiated when first accessed.
   ChartOfAccountsService get chartOfAccounts {
-    return _chartOfAccounts ??= ChartOfAccountsService();
+    return _chartOfAccounts ??=
+        ChartOfAccountsService(companyFileService: companyFile);
   }
 
   /// Instance of the GeneralJournalService
@@ -53,7 +54,10 @@ class Services {
   /// Handles the creation, storage, and retrieval of general journal entries
   /// for accounting operations. Lazily instantiated when first accessed.
   GeneralJournalService get generalJournal {
-    return _generalJournal ??= GeneralJournalService(testMode: _testMode);
+    return _generalJournal ??= GeneralJournalService(
+      testMode: _testMode,
+      companyFileService: companyFile,
+    );
   }
 
   /// Instance of the BankStatementService
@@ -98,7 +102,9 @@ class Services {
   /// All company data manipulation goes through this service.
   /// Lazily instantiated when first accessed.
   CompanyFileService get companyFile {
-    return _companyFile ??= CompanyFileService(testMode: _testMode);
+    final service = _companyFile ??= CompanyFileService(testMode: _testMode);
+    service.ensureCompanyFileReady();
+    return service;
   }
 }
 
