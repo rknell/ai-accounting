@@ -2,19 +2,29 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:ai_accounting/models/account.dart';
+import 'package:path/path.dart' as p;
 
 /// Service that provides access to chart of accounts data
 class ChartOfAccountsService {
+  /// Creates a chart-of-accounts service that reads from [inputsDirectory] or
+  /// falls back to the project `inputs/` directory (overridable via
+  /// `AI_ACCOUNTING_INPUTS_DIR`).
+  ChartOfAccountsService({String? inputsDirectory})
+      : _inputsDirectory = inputsDirectory ??
+            Platform.environment['AI_ACCOUNTING_INPUTS_DIR'] ??
+            'inputs' {
+    loadAccounts();
+  }
+
+  final String _inputsDirectory;
+
   /// Map of account code to Account object for quick lookups
   final Map<String, Account> accounts = {};
 
   /// Flag indicating if data has been loaded
   bool _isLoaded = false;
 
-  /// Default constructor
-  ChartOfAccountsService() {
-    loadAccounts();
-  }
+  String get _accountsFilePath => p.join(_inputsDirectory, 'accounts.json');
 
   /// Loads accounts from the JSON file
   ///
@@ -23,7 +33,7 @@ class ChartOfAccountsService {
     if (_isLoaded) return true;
 
     try {
-      final file = File('inputs/accounts.json');
+      final file = File(_accountsFilePath);
       final jsonString = file.readAsStringSync();
       final List<dynamic> jsonList = jsonDecode(jsonString) as List<dynamic>;
 
@@ -86,7 +96,7 @@ class ChartOfAccountsService {
   /// Returns true if successful, false otherwise
   bool saveAccounts() {
     try {
-      final file = File('inputs/accounts.json');
+      final file = File(_accountsFilePath);
 
       // Convert accounts to list and sort by account code
       final accountsList = accounts.values.toList();

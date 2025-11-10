@@ -7,6 +7,7 @@ import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/models/split_transaction.dart';
 import 'package:ai_accounting/services/environment_service.dart';
 import 'package:ai_accounting/services/services.dart';
+import 'package:path/path.dart' as p;
 
 /// Service that provides access to general journal data
 class GeneralJournalService {
@@ -19,12 +20,19 @@ class GeneralJournalService {
   /// 🛡️ TEST MODE: Prevents file operations when true
   final bool _testMode;
 
+  final String _dataDirectory;
+
   /// Default constructor
-  GeneralJournalService({bool testMode = false}) : _testMode = testMode {
+  GeneralJournalService({bool testMode = false})
+      : _testMode = testMode,
+        _dataDirectory =
+            Platform.environment['AI_ACCOUNTING_DATA_DIR'] ?? 'data' {
     if (!_testMode) {
       loadEntries();
     }
   }
+
+  String get _journalFilePath => p.join(_dataDirectory, 'general_journal.json');
 
   /// Loads general journal entries from the JSON file
   ///
@@ -33,7 +41,7 @@ class GeneralJournalService {
     if (_isLoaded) return true;
 
     try {
-      final file = File('data/general_journal.json');
+      final file = File(_journalFilePath);
 
       // Create the file if it doesn't exist
       if (!file.existsSync()) {
@@ -75,7 +83,7 @@ class GeneralJournalService {
     }
 
     try {
-      final file = File('data/general_journal.json');
+      final file = File(_journalFilePath);
       // Sort entries in ascending date order before saving
       entries.sort((a, b) => a.date.compareTo(b.date));
       final jsonString = jsonEncode(entries.map((e) => e.toJson()).toList());

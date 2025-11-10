@@ -7,8 +7,12 @@ import 'package:dart_openai_client/dart_openai_client.dart';
 import 'package:path/path.dart' as path;
 
 final projectRoot = Directory.current.path;
-final configDir = Directory(path.join(projectRoot, 'config'));
-final inputsDir = Directory(path.join(projectRoot, 'inputs'));
+final configDir = Directory(Platform.environment['AI_ACCOUNTING_CONFIG_DIR'] ??
+    path.join(projectRoot, 'config'));
+final inputsDir = Directory(Platform.environment['AI_ACCOUNTING_INPUTS_DIR'] ??
+    path.join(projectRoot, 'inputs'));
+final dataDir = Directory(Platform.environment['AI_ACCOUNTING_DATA_DIR'] ??
+    path.join(projectRoot, 'data'));
 
 // DRY: Define config file paths once
 final supplierListPath = path.join(inputsDir.path, "supplier_list.json");

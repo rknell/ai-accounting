@@ -5810,8 +5810,15 @@ class _EmptyToolRegistry extends ToolExecutorRegistry {
 
 /// 🚀 **MAIN ENTRY POINT**: Start the Accountant MCP server
 void main() async {
+  final inputsPathOverride =
+      Platform.environment['AI_ACCOUNTING_INPUTS_DIR'] ?? 'inputs';
+  final dataPathOverride =
+      Platform.environment['AI_ACCOUNTING_DATA_DIR'] ?? 'data';
+
   final server = AccountantMCPServer(
     enableDebugLogging: false, // Reduced logging for performance
+    inputsPath: inputsPathOverride,
+    dataPath: dataPathOverride,
     logger: (level, message, [data]) {
       if (level == 'error' || level == 'info') {
         // Only show important messages
