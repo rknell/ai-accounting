@@ -252,7 +252,8 @@ void main() {
             .firstWhere((t) => t.name == 'create_accounting_rule');
 
         final result = await tool.callback!({
-          'ruleName': 'Test Revenue Rule ${DateTime.now().millisecondsSinceEpoch}',
+          'ruleName':
+              'Test Revenue Rule ${DateTime.now().millisecondsSinceEpoch}',
           'condition': 'contains sales',
           'action': 'categorize as revenue',
           'accountCode': '150', // Existing account
@@ -273,7 +274,8 @@ void main() {
             .getAvailableTools()
             .firstWhere((t) => t.name == 'create_accounting_rule');
 
-        final uniqueRuleName = 'Update Test Rule ${DateTime.now().millisecondsSinceEpoch}';
+        final uniqueRuleName =
+            'Update Test Rule ${DateTime.now().millisecondsSinceEpoch}';
         await createTool.callback!({
           'ruleName': uniqueRuleName,
           'condition': 'contains update test',
@@ -322,7 +324,8 @@ void main() {
               .firstWhere((t) => t.name == 'add_accounting_rule');
 
           await tool.callback!({
-            'ruleName': 'Legacy Test Rule ${DateTime.now().millisecondsSinceEpoch}',
+            'ruleName':
+                'Legacy Test Rule ${DateTime.now().millisecondsSinceEpoch}',
             'condition': 'contains legacy test',
             'action': 'categorize as legacy test',
             'accountCode': '555', // Non-existent account
@@ -361,7 +364,8 @@ void main() {
               .firstWhere((t) => t.name == 'update_supplier_info');
 
           await tool.callback!({
-            'supplierName': 'Test Supplier ${DateTime.now().millisecondsSinceEpoch}',
+            'supplierName':
+                'Test Supplier ${DateTime.now().millisecondsSinceEpoch}',
             'supplies': 'Test supplies',
             'suggestedAccountCode': '444', // Non-existent account
           });
@@ -393,7 +397,8 @@ void main() {
             .firstWhere((t) => t.name == 'update_supplier_info');
 
         final result = await tool.callback!({
-          'supplierName': 'Valid Test Supplier ${DateTime.now().millisecondsSinceEpoch}',
+          'supplierName':
+              'Valid Test Supplier ${DateTime.now().millisecondsSinceEpoch}',
           'supplies': 'Valid test supplies',
           'suggestedAccountCode': '350', // Existing account
         });

@@ -95,14 +95,7 @@ const List<_ExpenseRule> _expenseRules = [
   _ExpenseRule(
     accountCode: '301', // Utilities - Distillery
     justification: 'Utilities or energy expense',
-    keywords: [
-      'utility',
-      'electricity',
-      'power',
-      'water',
-      'energy',
-      'gas'
-    ],
+    keywords: ['utility', 'electricity', 'power', 'water', 'energy', 'gas'],
   ),
   _ExpenseRule(
     accountCode: '308', // Bank Fees
@@ -148,35 +141,17 @@ const List<_ExpenseRule> _expenseRules = [
   _ExpenseRule(
     accountCode: '203', // Bottles & Packaging
     justification: 'Bottling or packaging materials',
-    keywords: [
-      'bottle',
-      'label',
-      'packaging',
-      'uniquepak',
-      'label plus'
-    ],
+    keywords: ['bottle', 'label', 'packaging', 'uniquepak', 'label plus'],
   ),
   _ExpenseRule(
     accountCode: '317', // Training & Education
     justification: 'Training or professional development',
-    keywords: [
-      'training',
-      'education',
-      'course',
-      'conference',
-      'webinar'
-    ],
+    keywords: ['training', 'education', 'course', 'conference', 'webinar'],
   ),
   _ExpenseRule(
     accountCode: '318', // Trade Shows & Memberships
     justification: 'Trade show or membership fee',
-    keywords: [
-      'trade show',
-      'membership',
-      'association',
-      'club',
-      'network'
-    ],
+    keywords: ['trade show', 'membership', 'association', 'club', 'network'],
   ),
   _ExpenseRule(
     accountCode: '319', // Distillery Equipment

@@ -25,7 +25,7 @@ class GSTReport extends BaseReport {
           .getAccountsByType(AccountType.revenue)
           .where((account) => account.gstType == GstType.gstOnIncome)
           .toList();
-      
+
       final gstFreeIncomeAccounts = chartOfAccounts
           .getAllAccounts()
           .where((account) => account.gstType == GstType.gstFreeIncome)
@@ -37,7 +37,7 @@ class GSTReport extends BaseReport {
           .getAllAccounts()
           .where((account) => account.gstType == GstType.gstOnExpenses)
           .toList();
-          
+
       final gstFreeExpenseAccounts = chartOfAccounts
           .getAllAccounts()
           .where((account) => account.gstType == GstType.gstFreeExpenses)
@@ -52,7 +52,7 @@ class GSTReport extends BaseReport {
       final gstFreeIncomeTotals = <String, double>{};
       final gstOnExpenseTotals = <String, double>{};
       final gstFreeExpenseTotals = <String, double>{};
-      
+
       double totalGstExclusiveIncome = 0;
       double totalGstFreeIncome = 0;
       double totalGstExclusiveExpenses = 0;

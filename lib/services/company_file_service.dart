@@ -6,6 +6,7 @@ import 'package:ai_accounting/models/account.dart';
 import 'package:ai_accounting/models/company_file.dart';
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/models/supplier.dart';
+import 'package:ai_accounting/models/supplier_spend_type.dart';
 import 'package:ai_accounting/utils/journal_sanitizer.dart';
 import 'package:crypto/crypto.dart';
 
@@ -107,6 +108,95 @@ class CompanyFileService {
     }
 
     _currentCompanyFile = updater(_currentCompanyFile!);
+    _isLoaded = true;
+
+    if (!persist || _testMode) {
+      return true;
+    }
+
+    return saveCurrentCompanyFile();
+  }
+
+  /// Ensures a supplier with [name] exists in the company file.
+  ///
+  /// If missing, adds a new supplier with [supplies] and optional [account].
+  /// Returns true when a supplier was added or updated, false if no change.
+  bool ensureSupplierExistsByName({
+    required String name,
+    String supplies = 'Unknown',
+    String? account,
+    bool replaceExistingSupplies = false,
+    bool persist = true,
+  }) {
+    if (_currentCompanyFile == null) {
+      print('❌ No company file loaded to ensure supplier exists');
+      return false;
+    }
+
+    final incoming = SupplierModel(
+      name: name.trim(),
+      supplies: supplies.trim().isEmpty ? 'Unknown' : supplies.trim(),
+      account: account?.trim().isEmpty == true ? null : account?.trim(),
+    );
+
+    final currentSuppliers = _currentCompanyFile!.suppliers;
+    final updatedSuppliers = SupplierListHelper.upsertSupplier(
+      currentSuppliers,
+      incoming,
+      replaceExistingSupplies: replaceExistingSupplies,
+      preserveAccountWhenMissing: true,
+    );
+
+    final changed = updatedSuppliers.length != currentSuppliers.length ||
+        !_listEqualsSuppliers(updatedSuppliers, currentSuppliers);
+
+    if (!changed) {
+      return false;
+    }
+
+    _currentCompanyFile = _currentCompanyFile!.copyWith(
+      suppliers: updatedSuppliers,
+    );
+    _isLoaded = true;
+
+    if (!persist || _testMode) {
+      return true;
+    }
+
+    return saveCurrentCompanyFile();
+  }
+
+  /// Upserts a full [SupplierModel] into the company file supplier list.
+  ///
+  /// Returns true when the list changed, false otherwise.
+  bool upsertSupplier(
+    SupplierModel supplier, {
+    bool replaceExistingSupplies = false,
+    bool persist = true,
+  }) {
+    if (_currentCompanyFile == null) {
+      print('❌ No company file loaded to upsert supplier');
+      return false;
+    }
+
+    final currentSuppliers = _currentCompanyFile!.suppliers;
+    final updatedSuppliers = SupplierListHelper.upsertSupplier(
+      currentSuppliers,
+      supplier,
+      replaceExistingSupplies: replaceExistingSupplies,
+      preserveAccountWhenMissing: true,
+    );
+
+    final changed = updatedSuppliers.length != currentSuppliers.length ||
+        !_listEqualsSuppliers(updatedSuppliers, currentSuppliers);
+
+    if (!changed) {
+      return false;
+    }
+
+    _currentCompanyFile = _currentCompanyFile!.copyWith(
+      suppliers: updatedSuppliers,
+    );
     _isLoaded = true;
 
     if (!persist || _testMode) {
@@ -259,6 +349,7 @@ class CompanyFileService {
     String? companyProfilePath,
     String? accountingRulesPath,
     String? supplierListPath,
+    String? supplierSpendTypesPath,
   }) {
     if (_testMode) {
       print('🛡️ TEST MODE: Skipping migration operation');
@@ -274,6 +365,7 @@ class CompanyFileService {
       companyProfilePath ??= 'inputs/company_profile.txt';
       accountingRulesPath ??= 'inputs/accounting_rules.txt';
       supplierListPath ??= 'inputs/supplier_list.json';
+      supplierSpendTypesPath ??= 'config/supplier_spend_types.json';
 
       // Load accounts
       final accounts = _loadAccounts(accountsPath);
@@ -300,6 +392,10 @@ class CompanyFileService {
       // Load suppliers
       final suppliers = _loadSuppliers(supplierListPath);
       print('🏪 Loaded ${suppliers.length} suppliers');
+      final supplierSpendTypes =
+          _loadSupplierSpendTypes(supplierSpendTypesPath);
+      print(
+          '🧾 Loaded ${supplierSpendTypes.length} supplier spend configurations');
 
       // Create metadata
       final metadata = CompanyFileMetadata(
@@ -318,6 +414,7 @@ class CompanyFileService {
         generalJournal: generalJournal,
         accountingRules: accountingRules,
         suppliers: suppliers,
+        supplierSpendTypes: supplierSpendTypes,
         metadata: metadata,
       );
 
@@ -617,6 +714,38 @@ class CompanyFileService {
     }
   }
 
+  List<SupplierSpendTypeMapping> _loadSupplierSpendTypes(String filePath) {
+    try {
+      final file = File(filePath);
+      if (!file.existsSync()) {
+        print('⚠️ Supplier spend config not found: $filePath');
+        return List<SupplierSpendTypeMapping>.from(
+            kDefaultSupplierSpendTypeMappings);
+        }
+
+      final jsonString = file.readAsStringSync();
+      if (jsonString.trim().isEmpty) {
+        return List<SupplierSpendTypeMapping>.from(
+            kDefaultSupplierSpendTypeMappings);
+      }
+
+      final decoded = jsonDecode(jsonString);
+      if (decoded is List) {
+        return decoded
+            .map((entry) => SupplierSpendTypeMapping.fromJson(
+                Map<String, dynamic>.from(entry as Map)))
+            .toList();
+      }
+
+      throw const FormatException(
+          'Supplier spend configuration must be a JSON array');
+    } catch (e) {
+      print('⚠️ Error loading supplier spend config: $e');
+      return List<SupplierSpendTypeMapping>.from(
+          kDefaultSupplierSpendTypeMappings);
+    }
+  }
+
   /// Creates a backup of the company file before saving
   void _createBackup(String originalPath) {
     try {
@@ -660,6 +789,22 @@ class CompanyFileService {
     return 'rule_${timestamp}_$random';
   }
 
+  bool _listEqualsSuppliers(
+      List<SupplierModel> a, List<SupplierModel> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      final ai = a[i];
+      final bi = b[i];
+      if (ai.name != bi.name ||
+          ai.supplies != bi.supplies ||
+          (ai.account ?? '') != (bi.account ?? '')) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Gets accounts filtered by type
   List<Account> getAccountsByType(AccountType type) {
     if (_currentCompanyFile == null) return [];
@@ -701,6 +846,27 @@ class CompanyFileService {
     return _currentCompanyFile?.profile;
   }
 
+  /// Returns the supplier spend configuration list
+  List<SupplierSpendTypeMapping> getSupplierSpendTypes() {
+    if (_currentCompanyFile == null) {
+      return const [];
+    }
+    return List.unmodifiable(_currentCompanyFile!.supplierSpendTypes);
+  }
+
+  /// Updates the supplier spend configuration list
+  bool updateSupplierSpendTypes(List<SupplierSpendTypeMapping> mappings) {
+    if (_currentCompanyFile == null) {
+      print('❌ No company file loaded to update supplier spend types');
+      return false;
+    }
+    return updateCompanyFile(
+      (current) => current.copyWith(
+        supplierSpendTypes: List<SupplierSpendTypeMapping>.from(mappings),
+      ),
+    );
+  }
+
   /// Validates the current company file
   List<String> validate() {
     if (_currentCompanyFile == null) {
@@ -719,6 +885,7 @@ class CompanyFileService {
     String? companyProfilePath,
     String? accountingRulesPath,
     String? supplierListPath,
+    String? supplierSpendTypesPath,
   }) {
     if (_testMode) {
       print('🛡️ TEST MODE: Skipping export operation');
@@ -737,6 +904,7 @@ class CompanyFileService {
       companyProfilePath ??= 'inputs/company_profile.txt';
       accountingRulesPath ??= 'inputs/accounting_rules.txt';
       supplierListPath ??= 'inputs/supplier_list.json';
+      supplierSpendTypesPath ??= 'config/supplier_spend_types.json';
 
       // Export accounts
       final accountsJson = jsonEncode(
@@ -762,6 +930,12 @@ class CompanyFileService {
       final suppliersJson = jsonEncode(
           _currentCompanyFile!.suppliers.map((s) => s.toJson()).toList());
       File(supplierListPath).writeAsStringSync(suppliersJson);
+
+      final supplierSpendJson = jsonEncode(_currentCompanyFile!
+          .supplierSpendTypes
+          .map((s) => s.toJson())
+          .toList());
+      File(supplierSpendTypesPath).writeAsStringSync(supplierSpendJson);
 
       print('✅ Exported company file to individual files');
       return true;

@@ -1,6 +1,7 @@
 import 'package:ai_accounting/models/account.dart';
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/models/supplier.dart';
+import 'package:ai_accounting/models/supplier_spend_type.dart';
 import 'package:json_annotation/json_annotation.dart';
 
 part 'company_file.g.dart';
@@ -13,6 +14,7 @@ part 'company_file.g.dart';
 /// - Company profile information (company_profile.txt)
 /// - Accounting rules (accounting_rules.txt)
 /// - Supplier list (supplier_list.json)
+/// - Supplier configuration (spend cadence mappings)
 ///
 /// **DESIGN PRINCIPLES:**
 /// - Immutable data container (no direct modification)
@@ -39,6 +41,9 @@ class CompanyFile {
   /// Supplier list with categorization information
   final List<SupplierModel> suppliers;
 
+  /// Supplier cadence configuration (fixed / variable / one-time)
+  final List<SupplierSpendTypeMapping> supplierSpendTypes;
+
   /// Metadata about the company file
   final CompanyFileMetadata metadata;
 
@@ -50,6 +55,7 @@ class CompanyFile {
     required this.generalJournal,
     required this.accountingRules,
     required this.suppliers,
+    required this.supplierSpendTypes,
     required this.metadata,
   });
 
@@ -68,6 +74,7 @@ class CompanyFile {
     List<GeneralJournal>? generalJournal,
     List<AccountingRule>? accountingRules,
     List<SupplierModel>? suppliers,
+    List<SupplierSpendTypeMapping>? supplierSpendTypes,
     CompanyFileMetadata? metadata,
   }) {
     return CompanyFile(
@@ -77,6 +84,7 @@ class CompanyFile {
       generalJournal: generalJournal ?? this.generalJournal,
       accountingRules: accountingRules ?? this.accountingRules,
       suppliers: suppliers ?? this.suppliers,
+      supplierSpendTypes: supplierSpendTypes ?? this.supplierSpendTypes,
       metadata: metadata ?? this.metadata,
     );
   }
@@ -139,6 +147,13 @@ class CompanyFile {
       }
     }
 
+    for (int i = 0; i < supplierSpendTypes.length; i++) {
+      final config = supplierSpendTypes[i];
+      if (config.supplierName.isEmpty) {
+        errors.add('Supplier spend type $i: supplier name cannot be empty');
+      }
+    }
+
     return errors;
   }
 
@@ -153,6 +168,9 @@ class CompanyFile {
 
   /// Gets the total number of accounting rules
   int get ruleCount => accountingRules.length;
+
+  /// Gets the total number of supplier spend configurations
+  int get supplierSpendTypeCount => supplierSpendTypes.length;
 
   /// Gets accounts filtered by type
   List<Account> getAccountsByType(AccountType type) {
@@ -180,7 +198,7 @@ class CompanyFile {
 
   @override
   String toString() =>
-      'CompanyFile(id: $id, name: ${profile.name}, accounts: $accountCount, transactions: $transactionCount, suppliers: $supplierCount, rules: $ruleCount)';
+      'CompanyFile(id: $id, name: ${profile.name}, accounts: $accountCount, transactions: $transactionCount, suppliers: $supplierCount, rules: $ruleCount, supplierConfigs: $supplierSpendTypeCount)';
 
   @override
   bool operator ==(Object other) {
@@ -191,7 +209,8 @@ class CompanyFile {
         other.accounts.length == accounts.length &&
         other.generalJournal.length == generalJournal.length &&
         other.accountingRules.length == accountingRules.length &&
-        other.suppliers.length == suppliers.length;
+        other.suppliers.length == suppliers.length &&
+        other.supplierSpendTypes.length == supplierSpendTypes.length;
   }
 
   @override
@@ -202,6 +221,7 @@ class CompanyFile {
         Object.hashAll(generalJournal.map((g) => g.hashCode)),
         Object.hashAll(accountingRules.map((r) => r.hashCode)),
         Object.hashAll(suppliers.map((s) => s.hashCode)),
+        Object.hashAll(supplierSpendTypes.map((s) => s.hashCode)),
       );
 }
 
@@ -497,6 +517,3 @@ class CompanyFileMetadata {
   @override
   int get hashCode => Object.hash(version, createdAt, modifiedAt);
 }
-
-
-

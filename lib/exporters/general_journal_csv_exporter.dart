@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/services/services.dart';
+import 'package:ai_accounting/utils/supplier_note_parser.dart';
 
 /// Exports the general journal to a CSV file with flattened debit/credit rows.
 class GeneralJournalCsvExporter {
@@ -13,8 +14,6 @@ class GeneralJournalCsvExporter {
 
   static const _header =
       'Date,Description,Supplier,Account Name,Account Code,Credit,Debit';
-
-  static final RegExp _supplierPattern = RegExp(r'Supplier:\s*([^\n]+)');
 
   /// Builds the CSV contents for the provided [entries].
   ///
@@ -28,7 +27,8 @@ class GeneralJournalCsvExporter {
     for (final entry in sourceEntries) {
       final date = _formatDate(entry.date);
       final description = _escapeCsv(entry.description);
-      final supplier = _escapeCsv(_extractSupplier(entry.notes));
+      final supplier =
+          _escapeCsv(SupplierNoteParser.extractSupplier(entry.notes) ?? '');
 
       for (final debit in entry.debits) {
         final accountName = _resolveAccountName(debit.accountCode);
@@ -79,22 +79,6 @@ class GeneralJournalCsvExporter {
       return account.name;
     }
     return 'Unknown Account ($accountCode)';
-  }
-
-  String _extractSupplier(String notes) {
-    if (notes.isEmpty) {
-      return '';
-    }
-    final match = _supplierPattern.firstMatch(notes);
-    if (match == null) {
-      return '';
-    }
-    var value = match.group(1)?.trim() ?? '';
-    final confidenceIndex = value.toLowerCase().indexOf('(confidence');
-    if (confidenceIndex != -1) {
-      value = value.substring(0, confidenceIndex).trim();
-    }
-    return value;
   }
 
   String _formatDate(DateTime date) =>

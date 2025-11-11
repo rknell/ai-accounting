@@ -24,7 +24,8 @@ void main() {
     late _TestServices testServices;
 
     setUp(() {
-      tempDir = Directory.systemTemp.createTempSync('ai_accounting_company_file_');
+      tempDir =
+          Directory.systemTemp.createTempSync('ai_accounting_company_file_');
       companyFilePath = File(p.join(tempDir.path, 'company_file.json'));
 
       final sampleAccounts = [
@@ -49,7 +50,8 @@ void main() {
 
       companyFileService = CompanyFileService();
       expect(
-        companyFileService.ensureCompanyFileReady(filePath: companyFilePath.path),
+        companyFileService.ensureCompanyFileReady(
+            filePath: companyFilePath.path),
         isTrue,
       );
 
@@ -86,7 +88,8 @@ void main() {
       }
     });
 
-    test('ChartOfAccountsService prefers the unified company file snapshot', () {
+    test('ChartOfAccountsService prefers the unified company file snapshot',
+        () {
       expect(chartService.loadAccounts(), isTrue);
       final bankAccount = chartService.getAccount('001');
       final expenseAccount = chartService.getAccount('316');
@@ -126,7 +129,8 @@ void main() {
       );
 
       expect(savedFile.generalJournal.length, equals(1));
-      expect(savedFile.generalJournal.first.description, equals('Test purchase'));
+      expect(
+          savedFile.generalJournal.first.description, equals('Test purchase'));
     });
   });
 }
@@ -154,6 +158,7 @@ CompanyFile _buildCompanyFile({
     generalJournal: generalJournal,
     accountingRules: const <AccountingRule>[],
     suppliers: const <SupplierModel>[],
+    supplierSpendTypes: const [],
     metadata: CompanyFileMetadata(
       version: '1.0.0',
       createdAt: DateTime.utc(2024, 1, 1),

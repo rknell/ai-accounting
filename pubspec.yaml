@@ -14,6 +14,7 @@ dependencies:
   dotenv: ^4.2.0
   get_it: any
   json_annotation: any
+  meta: ^1.11.0
   path: any
   puppeteer: ^3.19.0
   test: any

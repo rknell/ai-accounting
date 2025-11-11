@@ -5,6 +5,7 @@ import 'package:ai_accounting/services/environment_service.dart';
 import 'package:ai_accounting/services/general_journal_service.dart';
 import 'package:ai_accounting/services/report_generation_service.dart';
 import 'package:ai_accounting/services/reports.dart';
+import 'package:ai_accounting/services/supplier_spend_type_service.dart';
 import 'package:get_it/get_it.dart';
 
 /// Services class that acts as a gateway to access all application services
@@ -39,6 +40,9 @@ class Services {
 
   /// Private instance of the CompanyFileService
   CompanyFileService? _companyFile;
+
+  /// Private instance of the SupplierSpendTypeService
+  SupplierSpendTypeService? _supplierSpendTypes;
 
   /// Instance of the ChartOfAccountsService
   ///
@@ -105,6 +109,16 @@ class Services {
     final service = _companyFile ??= CompanyFileService(testMode: _testMode);
     service.ensureCompanyFileReady();
     return service;
+  }
+
+  /// Instance of the SupplierSpendTypeService
+  ///
+  /// Provides access to supplier cadence mappings used by spend reports.
+  SupplierSpendTypeService get supplierSpendTypes {
+    return _supplierSpendTypes ??= SupplierSpendTypeService(
+      companyFileService: companyFile,
+      testMode: _testMode,
+    );
   }
 }
 

@@ -86,7 +86,8 @@ void main() {
           const JsonEncoder.withIndent('  ').convert(sampleJournal));
 
       final accountsJson = jsonDecode(
-          File(p.join(tempInputsDir.path, 'accounts.json')).readAsStringSync()) as List<dynamic>;
+          File(p.join(tempInputsDir.path, 'accounts.json'))
+              .readAsStringSync()) as List<dynamic>;
 
       final companyProfile = <String, Object>{
         'name': 'Test Company',
@@ -119,12 +120,13 @@ void main() {
         'generalJournal': sampleJournal,
         'accountingRules': <Object>[],
         'suppliers': jsonDecode(
-            File(p.join(tempInputsDir.path, 'supplier_list.json')).readAsStringSync()),
+            File(p.join(tempInputsDir.path, 'supplier_list.json'))
+                .readAsStringSync()),
         'metadata': metadata,
       };
 
-      File(tempCompanyFilePath)
-          .writeAsStringSync(const JsonEncoder.withIndent('  ').convert(companyFile));
+      File(tempCompanyFilePath).writeAsStringSync(
+          const JsonEncoder.withIndent('  ').convert(companyFile));
 
       final result = await Process.run(
         'dart',

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:ai_accounting/agents/accounting_agent_shell.dart';
 import 'package:ai_accounting/exporters/general_journal_csv_exporter.dart';
+import 'package:ai_accounting/exporters/transaction_summary_csv_exporter.dart';
 import 'package:ai_accounting/models/account.dart';
 import 'package:ai_accounting/services/services.dart';
 import 'package:path/path.dart' as path;
@@ -46,6 +47,9 @@ class AccountingWizard {
           await _handleGeneralJournalExport();
           break;
         case '7':
+          await _handleTransactionSummaryExport();
+          break;
+        case '8':
         case 'q':
         case 'Q':
           _shouldExit = true;
@@ -65,7 +69,8 @@ class AccountingWizard {
     print('4) Manage bank statement filename mappings');
     print('5) Talk to the AI accountant');
     print('6) Export general journal to CSV');
-    print('7) Exit');
+    print('7) Export transaction summary (one row per entry)');
+    print('8) Exit');
   }
 
   Future<void> _handleImportMenu() async {
@@ -228,6 +233,43 @@ class AccountingWizard {
       print('✅ Exported $rowCount journal rows to $resolvedPath');
     } catch (e) {
       print('❌ Failed to export general journal: $e');
+    }
+  }
+
+  Future<void> _handleTransactionSummaryExport() async {
+    final entries = _services.generalJournal.getAllEntries();
+    if (entries.isEmpty) {
+      print('⚠️  No journal entries available to export.');
+      return;
+    }
+
+    final defaultPath = path.join(
+      Directory.current.path,
+      'data',
+      'transaction_summary_export.csv',
+    );
+
+    print('\n--- Categorised Transaction Summary Export ---');
+    print('Default path: $defaultPath');
+    final destination = _prompt(
+      'Enter destination path (leave blank for default)',
+      allowEmpty: true,
+    );
+    final resolvedPath = path.normalize(path.absolute(
+      destination == null || destination.isEmpty ? defaultPath : destination,
+    ));
+
+    try {
+      final gstCode =
+          Platform.environment['GST_CLEARING_ACCOUNT_CODE'] ?? '506';
+      final exporter = TransactionSummaryCsvExporter(
+        _services,
+        gstClearingAccountCode: gstCode,
+      );
+      exporter.exportToFile(resolvedPath, entries: entries);
+      print('✅ Exported ${entries.length} transactions to $resolvedPath');
+    } catch (e) {
+      print('❌ Failed to export transaction summary: $e');
     }
   }
 

@@ -19,8 +19,7 @@ void main() {
 
       final configData =
           jsonDecode(configFile.readAsStringSync()) as Map<String, dynamic>;
-      final servers =
-          (configData['mcpServers'] as Map<String, dynamic>? ?? {});
+      final servers = (configData['mcpServers'] as Map<String, dynamic>? ?? {});
 
       expect(
         servers.containsKey('accountant'),
@@ -31,4 +30,3 @@ void main() {
     });
   });
 }
-

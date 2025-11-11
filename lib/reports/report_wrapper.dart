@@ -56,6 +56,7 @@ class ReportWrapper {
       final gstReports = <String>[];
       final generalJournalReports = <String>[];
       final ledgerReports = <String>[];
+      final supplierSpendReports = <String>[];
       final otherReports = <String>[];
 
       for (final reportPath in reportFiles) {
@@ -72,14 +73,23 @@ class ReportWrapper {
         } else if (fileName.startsWith('ledger_') &&
             !fileName.startsWith('ledger_index')) {
           ledgerReports.add(fileName);
+        } else if (fileName.startsWith('supplier_spend_')) {
+          supplierSpendReports.add(fileName);
         } else if (!fileName.startsWith('ledger_index')) {
           otherReports.add(fileName);
         }
       }
 
       // Generate HTML with navigation
-      final html = _generateHtml(balanceSheetReports, profitAndLossReports,
-          gstReports, generalJournalReports, ledgerReports, otherReports);
+      final html = _generateHtml(
+        balanceSheetReports,
+        profitAndLossReports,
+        gstReports,
+        generalJournalReports,
+        ledgerReports,
+        supplierSpendReports,
+        otherReports,
+      );
 
       // Save the wrapper to file
       final wrapperFile = File(p.join(reportsDirectory, 'report_viewer.html'));
@@ -99,6 +109,7 @@ class ReportWrapper {
     List<String> gstReports,
     List<String> generalJournalReports,
     List<String> ledgerReports,
+    List<String> supplierSpendReports,
     List<String> otherReports,
   ) {
     final buffer = StringBuffer();
@@ -396,6 +407,29 @@ class ReportWrapper {
         buffer.writeln('</ul>');
       }
       buffer.writeln('</div>');
+    }
+
+    // Supplier Spend Reports
+    if (supplierSpendReports.isNotEmpty) {
+      buffer.writeln('''
+        <h2 onclick="toggleSection(this)">
+            <span>Supplier Spend</span>
+            <span class="toggle">▼</span>
+        </h2>
+        <ul>
+''');
+      for (final reportPath in supplierSpendReports) {
+        final reportDate = _extractDateFromFileName(reportPath);
+        buffer.writeln('''
+          <li>
+            <a href="javascript:void(0)" onclick="loadReport('$reportPath')">
+              Supplier Spend
+              <span class="date">$reportDate</span>
+            </a>
+          </li>
+''');
+      }
+      buffer.writeln('</ul>');
     }
 
     // Other Reports

@@ -76,14 +76,14 @@ void main() {
     final accountsFile = File('inputs/accounts.json');
     final accountsJson =
         jsonDecode(accountsFile.readAsStringSync()) as List<dynamic>;
-    final availableCodes = accountsJson
-        .map((entry) => entry['code'] as String)
-        .toSet();
+    final availableCodes =
+        accountsJson.map((entry) => entry['code'] as String).toSet();
 
     expect(
       availableCodes,
       containsAll(categorizerAccountCodes()),
-      reason: 'Every categorizer account code must exist in inputs/accounts.json',
+      reason:
+          'Every categorizer account code must exist in inputs/accounts.json',
     );
   });
 }

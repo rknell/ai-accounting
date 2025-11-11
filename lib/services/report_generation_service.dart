@@ -59,6 +59,9 @@ class ReportGenerationService {
     // Generate ledger report
     LedgerReport(services).generate(quarterStart, quarterEnd);
 
+    // Generate supplier spend cadence report
+    services.reports.generateSupplierSpendTypeReport(quarterStart, quarterEnd);
+
     // Generate report wrapper for easy navigation
     services.reports.generateReportWrapper();
 
@@ -124,6 +127,10 @@ class ReportGenerationService {
 
       // Generate ledger report
       LedgerReport(services).generate(quarterStart, quarterEnd);
+
+      // Generate supplier spend cadence report
+      services.reports
+          .generateSupplierSpendTypeReport(quarterStart, quarterEnd);
     }
 
     // Generate report wrapper for easy navigation

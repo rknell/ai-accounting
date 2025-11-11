@@ -141,6 +141,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -161,6 +162,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -178,6 +180,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -194,6 +197,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -222,6 +226,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -252,6 +257,7 @@ void main() {
         generalJournal: [validJournalEntry],
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -284,6 +290,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: invalidRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -311,6 +318,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: invalidSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -330,6 +338,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -347,6 +356,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -373,6 +383,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -393,6 +404,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -416,6 +428,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -440,6 +453,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -450,6 +464,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -460,6 +475,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 
@@ -479,6 +495,7 @@ void main() {
         generalJournal: testJournalEntries,
         accountingRules: testRules,
         suppliers: testSuppliers,
+        supplierSpendTypes: const [],
         metadata: testMetadata,
       );
 

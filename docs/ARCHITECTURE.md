@@ -3,7 +3,7 @@
 This project combines AI-powered categorisation with a suite of Model Context Protocol (MCP) servers. The goal of this document is to keep the essentials in one place so you can understand how the pieces fit together without chasing multiple guides.
 
 ## Data & Configuration
-- **Unified company file**: all live accounting data (chart of accounts, suppliers, accounting rules, company profile, and general journal) is stored in a single JSON snapshot. The default path is `data/company_file.json`, overridable via `AI_ACCOUNTING_COMPANY_FILE`.
+- **Unified company file**: all live accounting data (chart of accounts, suppliers, accounting rules, company profile, and general journal) is stored in a single JSON snapshot. The default path is `data/company_file.json`, overridable via `AI_ACCOUNTING_COMPANY_FILE`. Keep all user data in this one file; avoid writing to legacy `inputs/` JSON except for migration/tests. To run multiple sets of books, set a distinct `AI_ACCOUNTING_COMPANY_FILE` per company.
 - **Automatic migration**: on startup `CompanyFileService.ensureCompanyFileReady()` loads the configured JSON. If it is missing, the service migrates from the legacy `inputs/` / `data/` files, writes the new snapshot, and continues. Backups land in `data/backups/` before every save.
 - **Legacy overrides**: `AI_ACCOUNTING_INPUTS_DIR`, `AI_ACCOUNTING_DATA_DIR`, and `AI_ACCOUNTING_CONFIG_DIR` are still honoured so fixtures/tests can point at custom directories. When the unified file is unavailable or migration fails, services fall back to these directories transparently.
 - **Environment**: set `DEEPSEEK_API_KEY` before running any agent entry point. Additional MCP-specific environment variables can be set inside `config/mcp_servers.json`.
@@ -35,6 +35,7 @@ All entry points share the same setup pattern:
 - The `services` getter in `lib/services/services.dart` lazily registers a `Services` singleton with GetIt. Access services through this getter so MCP servers, entry points, and tests share the same instances.
 - `ChartOfAccountsService` and `GeneralJournalService` now load/save through the unified company file first, falling back to the legacy directories only when the file is unavailable. They still respect the `AI_ACCOUNTING_INPUTS_DIR`/`AI_ACCOUNTING_DATA_DIR` overrides so integration tests and fixtures stay isolated.
 - When writing tests that need custom behaviour, register your own `Services(testMode: true)` with GetIt, or override specific services before invoking MCP handlers.
+- `SupplierSpendTypeService` reads `config/supplier_spend_types.json` (respecting `AI_ACCOUNTING_CONFIG_DIR`) and exposes lookups for the Supplier Spend Type report so vendor cadence changes stay declarative.
 
 ## Code Organization Guidelines
 - Avoid ad-hoc Dart scripts in the repository root. If you need to exercise behaviour, add a proper unit/integration test under `test/`.
@@ -47,9 +48,11 @@ All entry points share the same setup pattern:
 - **Resource guards**: every invocation has a timeout and output-size clamp; processes are cleaned up on failure.
 
 ## Performance & Resilience Notes
-- **Supplier cache**: the accountant server caches `supplier_list.json` for five minutes (or until the file timestamp changes). This avoids re-reading JSON for every categorisation request while still picking up edits promptly.
+- **Suppliers source of truth**: suppliers are read from the unified company file when available and automatically added when discovered by categorisation/import flows. Legacy `inputs/supplier_list.json` is only used as a fallback for older setups.
+- **Supplier cache**: the accountant server caches `supplier_list.json` for five minutes (or until the file timestamp changes) when falling back to legacy mode.
 - **Timeout budgets**: `tools/list` requests default to 3 s, but heavyweight servers such as `accountant` request a 15 s window during discovery. Individual `tools/call` invocations should continue to pass explicit `timeout` values when they need stricter bounds.
 - **Web research**: tests disable web research when they assert latency-sensitive behaviour. Production categorisation keeps the default settings, but agents can pass `enableWebResearch: false` when they need deterministic responses.
+- **Supplier research cache**: when web research or manual creation provides a raw transaction description, the accountant server now stores the interpreted summary as `researchNotes` and records cleaned aliases. `match_supplier_fuzzy` scores these aliases/keywords so future runs auto-match with higher confidence.
 - **IO redirection**: entry points honour the `AI_ACCOUNTING_*` overrides noted above so you can run smoke tests (or CI) against temporary directories without touching the real books.
 
 ## Testing & Verification

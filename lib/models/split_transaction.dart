@@ -21,8 +21,9 @@ class SplitTransaction {
   SplitTransaction({
     required this.accountCode,
     required double amount,
-  }) : amount = double.parse(amount.toStringAsFixed(2)),
-       assert(double.parse(amount.toStringAsFixed(2)) > 0, 'Amount must be positive');
+  })  : amount = double.parse(amount.toStringAsFixed(2)),
+        assert(double.parse(amount.toStringAsFixed(2)) > 0,
+            'Amount must be positive');
 
   /// Creates a SplitTransaction from JSON
   factory SplitTransaction.fromJson(Map<String, dynamic> json) =>

@@ -14,6 +14,7 @@ part 'general_journal.g.dart';
 class GeneralJournal {
   /// When true, skips expensive chart-of-accounts validation (used during bulk loads).
   static bool disableAccountValidation = false;
+
   /// The date when the transaction occurred
   final DateTime date;
 
@@ -220,7 +221,7 @@ class GeneralJournal {
   ///
   /// This method determines if two transactions are duplicates based on ONLY the core
   /// bank transaction attributes, ignoring account codes (which change during categorization).
-  /// 
+  ///
   /// **MATCHING CRITERIA:**
   /// - Bank account code (0-99 range, e.g., 001, 002, 003, 050)
   /// - Transaction date (same day)

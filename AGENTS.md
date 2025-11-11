@@ -10,6 +10,7 @@ This file is your dedicated guide for contributing with automation support. Foll
 - Purpose: AI-assisted bookkeeping using Dart MCP servers plus CLI agents.
 - Core repos/services live under `lib/`, `mcp/`, `services/`, and `bin/`.
 - Unified accounting data lives at `data/company_file.json` (override via `AI_ACCOUNTING_COMPANY_FILE`). Legacy directories `inputs/` and `data/` remain read-only fallbacks for migrations/tests.
+- Keep all user data in one unified JSON file (the company file). Do not write to legacy `inputs/` files outside of migration and tests. To run multiple companies, point `AI_ACCOUNTING_COMPANY_FILE` to a different path per company.
 - Every change must preserve journal integrity (never introduce negative journal amounts—swap debit/credit instead).
 
 ## 2. Environment & Setup
@@ -95,7 +96,7 @@ Agents and CI use these commands to validate changes automatically per the AGENT
 ## 7. Tooling & Automation
 - MCP servers available:
   - `mcp/mcp_server_accountant.dart` — supplier CRUD, transaction search/update. Observe bank account protection (001–099).
-  - `mcp/mcp_server_terminal.dart` — guarded shell commands (blacklist, timeouts).
+  - `mcp/mcp_server_terminal.dart` — guarded shell commands (blacklist, timeouts). Only typical developer tooling (`git`, `dart`, `ls`, etc.) is permitted; destructive or privilege-escalation commands remain blocked.
   - `mcp/mcp_server_dart.dart` — exposes analyzer/test helpers.
   - `mcp/mcp_server_context_manager.dart` — manages long-session context.
   - `mcp/mcp_server_puppeteer.dart` — browser automation (optional).
@@ -108,15 +109,23 @@ Agents and CI use these commands to validate changes automatically per the AGENT
 - Unified company file backups stored in `data/backups/` on each save; maintain this behaviour.
 - Honor environment overrides (`AI_ACCOUNTING_INPUTS_DIR`, `AI_ACCOUNTING_DATA_DIR`, `AI_ACCOUNTING_CONFIG_DIR`) for tests and custom fixtures.
 - Never delete or mutate `inputs/` / `data/` reference files directly. Copy to a sandbox if write access is required.
+- Supplier cadence mappings (`fixed`/`variable`/`one time`) live in `config/supplier_spend_types.json`. Update this file (or its test override) when onboarding new vendors so the Supplier Spend report stays accurate. The suppliers list itself is persisted inside the unified company file and is auto-updated when new suppliers are discovered during categorisation/imports.
+- Maintain `config/bank_account_mappings.json` for statements whose filenames do not match bank account codes. The importer normalises filenames (case and spacing), so keep mappings current instead of renaming source files.
 - Sensitive configuration (API keys, credentials) must remain in environment variables; never commit secrets.
 
-## 9. Documentation Discipline
+## 9. Performance & Resilience Expectations
+- The accountant server caches supplier metadata (e.g., `supplier_list.json`) for five minutes or until the file timestamp changes; design features to work with this cache.
+- Default MCP `tools/list` calls expect ~3 s, but heavyweight servers such as `accountant` negotiate a 15 s discovery window. Pass explicit `timeout` values for long-running tool calls when needed.
+- Tests normally disable web research for deterministic behaviour; production workflows can keep it enabled, but expose toggles (e.g., `enableWebResearch`) so callers control latency trade-offs.
+- Supplier research results (aliases, `researchNotes`) are cached—ensure new tooling writes structured notes so future fuzzy matches stay accurate.
+
+## 10. Documentation Discipline
 - Update `docs/ARCHITECTURE.md`, `INSTRUCTIONS.md`, and relevant READMEs when behaviour changes.
 - Summarise architectural decisions (motivation, alternatives, trade-offs) in commit/PR descriptions.
 - Remove TODO comments by converting them into tracked issues or backlog items; no lingering TODOs in code.
 - Keep this `AGENTS.md` accurate—revise immediately when process/command changes.
 
-## PR Instructions
+## 11. PR Instructions
 - Title format: `[ai-accounting] <concise title>`
 - Before pushing:
   - Run `dart analyze` and ensure 0 issues.
@@ -126,7 +135,7 @@ Agents and CI use these commands to validate changes automatically per the AGENT
   - Summarize the change and link the tests that cover it.
   - Paste or summarize analyzer/test outputs.
 
-## 10. Contribution Checklist
+## 12. Contribution Checklist
 - [ ] Requirements captured and documented.
 - [ ] Failing test written/extended.
 - [ ] Implementation aligns with architecture + generalisation mandates.

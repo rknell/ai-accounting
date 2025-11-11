@@ -22,6 +22,8 @@ final accountingRulesPath = path.join(inputsDir.path, 'accounting_rules.txt');
 
 // UNCATEGORIZED ACCOUNT CODE - All new transactions startuncategor here
 const String uncategorizedAccountCode = '999';
+const double supplierConfidenceThreshold =
+    0.6; // Match default threshold in MCP supplier matcher
 
 Future<void> main() async {
   print('🤖 Starting AI Transaction Categorization Workflow...');
@@ -55,8 +57,9 @@ Future<void> main() async {
           entry.debits.any((d) => d.accountCode == uncategorizedAccountCode) ||
           entry.credits.any((c) => c.accountCode == uncategorizedAccountCode))
       .toList();
+  final totalTransactions = uncategorizedEntries.length;
 
-  print('🎯 Found ${uncategorizedEntries.length} uncategorized transactions');
+  print('🎯 Found $totalTransactions uncategorized transactions');
 
   if (uncategorizedEntries.isNotEmpty) {
     // Process transactions one at a time for better reliability and debugging
@@ -64,15 +67,14 @@ Future<void> main() async {
 
     // Config files are loaded by MCP server as needed
 
-    print(
-        '🔄 Processing ${uncategorizedEntries.length} transactions individually...');
+    print('🔄 Processing $totalTransactions transactions individually...');
 
-    for (int i = 0; i < uncategorizedEntries.length; i++) {
+    for (int i = 0; i < totalTransactions; i++) {
       final entry = uncategorizedEntries[i];
       final transactionNumber = i + 1;
 
       print(
-          '\n📄 Processing transaction $transactionNumber/${uncategorizedEntries.length}:');
+          '\n📄 Processing transaction $transactionNumber/$totalTransactions:');
       print('   💰 Amount: \$${entry.amount}');
       print('   📝 Description: ${entry.description}');
 
@@ -118,6 +120,26 @@ Future<void> main() async {
         print(
             '   📊 Supplier: $supplierName (${(confidence * 100).toStringAsFixed(1)}% confidence)');
         print('   🏪 Supplies: $supplies');
+
+        if (confidence < supplierConfidenceThreshold) {
+          final thresholdPercent =
+              (supplierConfidenceThreshold * 100).toStringAsFixed(1);
+          print(
+              '   ⚠️  Confidence ${(confidence * 100).toStringAsFixed(1)}% below $thresholdPercent% threshold – leaving uncategorized for manual review.');
+          continue;
+        }
+
+        // Ensure the discovered supplier is persisted in the unified company file
+        final added = services.companyFile.ensureSupplierExistsByName(
+          name: supplierName,
+          supplies: supplies,
+          // Do not overwrite non-unknown supplies automatically from this path
+          replaceExistingSupplies: false,
+          persist: true,
+        );
+        if (added) {
+          print('   🏷️ Added supplier "$supplierName" to company file');
+        }
 
         // Step 2: Determine account based on supplier and business rules
         String newAccountCode = '999'; // Default to uncategorized
@@ -177,6 +199,10 @@ Future<void> main() async {
         }
       } catch (e) {
         print('   ❌ Error processing transaction: $e');
+      } finally {
+        final progressPercent = (transactionNumber / totalTransactions) * 100.0;
+        print(
+            '   📈 Overall progress: $transactionNumber/$totalTransactions (${progressPercent.toStringAsFixed(1)}%) complete');
       }
     }
 

@@ -129,7 +129,7 @@ data/
 inputs/
 outputs/
 exports/
-reports/
+/reports/
 backups/
 
 # Logs and debugging

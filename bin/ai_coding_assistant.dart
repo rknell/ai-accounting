@@ -7,7 +7,7 @@ import "package:dart_openai_client/dart_openai_client.dart";
 String _getUserInput() {
   stdout.write("\nEnter your coding request: ");
   stdout.flush();
-  
+
   try {
     final input = stdin.readLineSync();
     return input?.trim() ?? '';
@@ -83,13 +83,13 @@ Future<void> main() async {
   try {
     // Interactive workflow: Main coding assistance loop
     await _runInteractiveWorkflow(agent);
-    } finally {
+  } finally {
     // Cleanup: Ensure proper shutdown
     print("\nShutting down systems...");
     await toolRegistry.shutdown();
     await client.close();
     print("✅ Clean shutdown completed");
-    }
+  }
 }
 
 /// Project analysis: Perform initial codebase assessment
@@ -131,7 +131,8 @@ Future<void> _performInitialAnalysis(
 /// Interactive workflow: Main coding assistance loop
 Future<void> _runInteractiveWorkflow(Agent agent) async {
   print("INTERACTIVE CODE ANALYSIS");
-  print("Enter your coding request, file path for review, or architectural question.");
+  print(
+      "Enter your coding request, file path for review, or architectural question.");
   print("Available commands:");
   print("  - 'analyze <file/dir>' - Code analysis");
   print("  - 'review <file>' - Code review");

@@ -132,4 +132,48 @@ class SupplierListHelper {
       List<SupplierModel> suppliers) {
     return suppliers.where((supplier) => !supplier.hasAccountCode).toList();
   }
+
+  /// Return a new supplier list with [incoming] added or updated.
+  ///
+  /// Matching is case-insensitive and fuzzy by name (exact or contains).
+  /// When a match exists:
+  /// - If the existing supplier has an empty or "Unknown" supplies field and
+  ///   the incoming has a non-empty supplies, update the supplies.
+  /// - If [replaceExistingSupplies] is true, always replace supplies when
+  ///   the incoming has a non-empty value.
+  /// - The optional [preserveAccountWhenMissing] keeps an existing account
+  ///   code if the incoming doesn't specify one.
+  /// The returned list is alphabetically sorted by name.
+  static List<SupplierModel> upsertSupplier(
+    List<SupplierModel> suppliers,
+    SupplierModel incoming, {
+    bool replaceExistingSupplies = false,
+    bool preserveAccountWhenMissing = true,
+  }) {
+    final existing = findSupplierByName(suppliers, incoming.name);
+    if (existing == null) {
+      final next = List<SupplierModel>.from(suppliers)..add(incoming);
+      return sortByName(next);
+    }
+
+    final shouldReplaceSupplies = replaceExistingSupplies ||
+        (existing.supplies.trim().isEmpty ||
+            existing.supplies.toLowerCase().trim() == 'unknown') &&
+            incoming.supplies.trim().isNotEmpty;
+
+    final next = suppliers.map((s) {
+      if (s == existing) {
+        final updated = s.copyWith(
+          supplies: shouldReplaceSupplies ? incoming.supplies : s.supplies,
+          account: (incoming.account == null || incoming.account!.isEmpty)
+              ? (preserveAccountWhenMissing ? s.account : null)
+              : incoming.account,
+        );
+        return updated;
+      }
+      return s;
+    }).toList();
+
+    return sortByName(next);
+  }
 }

@@ -1,0 +1,14 @@
+[
+  {
+    "supplier": "Bunnings",
+    "type": "one_time"
+  },
+  {
+    "supplier": "Rent",
+    "type": "fixed"
+  },
+  {
+    "supplier": "Oji",
+    "type": "variable"
+  }
+]

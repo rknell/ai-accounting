@@ -40,8 +40,8 @@ void main() {
         ),
       );
 
-      final response =
-          await toolRegistry.executeTool(toolCall, timeout: Duration(seconds: 30));
+      final response = await toolRegistry.executeTool(toolCall,
+          timeout: Duration(seconds: 30));
       final decoded = jsonDecode(response) as Map<String, dynamic>;
 
       expect(decoded['success'], isTrue);
@@ -62,8 +62,8 @@ void main() {
         ),
       );
 
-      final response =
-          await toolRegistry.executeTool(toolCall, timeout: Duration(seconds: 15));
+      final response = await toolRegistry.executeTool(toolCall,
+          timeout: Duration(seconds: 15));
       final decoded = jsonDecode(response) as Map<String, dynamic>;
       final suppliers = decoded['suppliers'] as List<dynamic>? ?? [];
       expect(suppliers, isNotEmpty,

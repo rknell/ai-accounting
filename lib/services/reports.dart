@@ -47,4 +47,10 @@ class ReportsService {
     final wrapper = ReportWrapper(services);
     return wrapper.generateWrapper();
   }
+
+  /// Generates the supplier spend cadence report for a date range.
+  bool generateSupplierSpendTypeReport(DateTime startDate, DateTime endDate) {
+    final report = SupplierSpendTypeReport(services: services);
+    return report.generate(startDate, endDate);
+  }
 }

@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:ai_accounting/exporters/general_journal_csv_exporter.dart';
+import 'package:ai_accounting/exporters/transaction_summary_csv_exporter.dart';
 import 'package:ai_accounting/models/account.dart';
 import 'package:ai_accounting/models/general_journal.dart';
 import 'package:ai_accounting/models/split_transaction.dart';
+import 'package:ai_accounting/models/supplier.dart';
 import 'package:ai_accounting/services/services.dart';
 import 'package:archive/archive_io.dart';
 import 'package:dart_openai_client/dart_openai_client.dart';
@@ -524,7 +527,7 @@ class AccountantMCPServer extends BaseMCPServer {
           'businessDescription': {
             'type': 'string',
             'description':
-                'What this supplier does and how it relates to the business',
+                'What this supplier does and how it relates to the business (stored as research notes for future matching)',
             'default': '',
           },
           'suggestedAccountCode': {
@@ -532,6 +535,13 @@ class AccountantMCPServer extends BaseMCPServer {
             'description':
                 'Suggested account code for transactions with this supplier',
             'default': '',
+          },
+          'aliases': {
+            'type': 'array',
+            'description':
+                'Alternative names, abbreviations, or trading names that should also match this supplier',
+            'items': {'type': 'string'},
+            'default': <String>[],
           },
         },
         'required': ['supplierName', 'supplies'],
@@ -752,6 +762,58 @@ class AccountantMCPServer extends BaseMCPServer {
         'required': ['supplierName', 'supplies'],
       },
       callback: _handleUpdateSupplierInfo,
+    ));
+
+    registerTool(MCPTool(
+      name: 'run_ai_accounting_menu_action',
+      description:
+          'Execute workflows from bin/ai_accounting.dart (imports, categorisation, exports, and mapping updates).',
+      inputSchema: {
+        'type': 'object',
+        'properties': {
+          'action': {
+            'type': 'string',
+            'enum': [
+              'import_all_bank_statements',
+              'import_bank_statement_file',
+              'categorise_uncategorised_transactions',
+              'generate_financial_reports',
+              'update_bank_statement_mapping',
+              'export_general_journal_csv',
+              'export_transaction_summary_csv',
+            ],
+            'description':
+                'Menu action to run. Mirrors options 1-7 from bin/ai_accounting.dart.',
+          },
+          'filePath': {
+            'type': 'string',
+            'description':
+                'Absolute or relative CSV path for import_bank_statement_file.',
+          },
+          'bankCode': {
+            'type': 'string',
+            'description':
+                'Optional three-digit bank code for imports or required for mapping updates.',
+          },
+          'mappingFilename': {
+            'type': 'string',
+            'description':
+                'Filename (without .csv) to map when updating bank statement mappings.',
+          },
+          'destinationPath': {
+            'type': 'string',
+            'description':
+                'Optional export destination for CSV outputs (defaults to data/).',
+          },
+          'configDirectory': {
+            'type': 'string',
+            'description':
+                'Override directory for config files (defaults to config/ or AI_ACCOUNTING_CONFIG_DIR).',
+          },
+        },
+        'required': ['action'],
+      },
+      callback: _handleAiAccountingMenuAction,
     ));
 
     // 📊 **AUDIT REPORTING TOOLS**: Generate plaintext reports for AI audit purposes
@@ -2202,14 +2264,75 @@ Notes: $notes
     final supplierName = arguments['supplierName'] as String;
     final supplies = arguments['supplies'] as String;
     final account = arguments['account'] as String?;
+    final rawTransactionText =
+        (arguments['rawTransactionText'] as String? ?? '').trim();
+    final businessDescription =
+        (arguments['businessDescription'] as String? ?? '').trim();
+    final aliasArguments = (arguments['aliases'] as List<dynamic>?)
+            ?.map((alias) => alias.toString().trim())
+            .where((alias) => alias.isNotEmpty)
+            .toSet() ??
+        <String>{};
+
+    final aliasFromRawText = _aliasFromRawTransaction(
+        rawTransactionText.isEmpty ? supplierName : rawTransactionText,
+        supplierName);
+    if (aliasFromRawText != null) {
+      aliasArguments.add(aliasFromRawText);
+    }
 
     logger?.call('info', 'Creating new supplier: $supplierName -> $supplies');
 
     try {
-      // Load supplier list and check for duplicates
+      // Prefer unified company file if available
+      final company = services.companyFile.currentCompanyFile;
+      if (company != null) {
+        final exists =
+            SupplierListHelper.findSupplierByName(company.suppliers, supplierName) != null;
+        if (exists) {
+          throw MCPServerException(
+              'Supplier "$supplierName" already exists. Use update_supplier to modify existing suppliers.');
+        }
+        final added = services.companyFile.ensureSupplierExistsByName(
+          name: supplierName,
+          supplies: supplies,
+          account: account,
+          replaceExistingSupplies: false,
+          persist: true,
+        );
+        if (!added) {
+          throw MCPServerException(
+              'Failed to persist supplier to company file. Please retry.');
+        }
+
+        final created = {
+          'name': supplierName,
+          'supplies': supplies,
+          if (account != null && account.isNotEmpty) 'account': account,
+          if (businessDescription.isNotEmpty)
+            'researchNotes': businessDescription,
+          if (aliasArguments.isNotEmpty)
+            'aliases': (aliasArguments.toList()
+              ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()))),
+        };
+
+        return MCPToolResult(
+          content: [
+            MCPContent.text(jsonEncode({
+              'success': true,
+              'action': 'created',
+              'supplier': created,
+              'totalSuppliers': services
+                  .companyFile.currentCompanyFile!.suppliers.length,
+              'message': 'Successfully created supplier "$supplierName"',
+            })),
+          ],
+        );
+      }
+
+      // Legacy fallback: write to inputs/supplier_list.json
       final supplierFile = File('$inputsPath/supplier_list.json');
       List<Map<String, dynamic>> suppliers = [];
-
       if (supplierFile.existsSync()) {
         final jsonString = supplierFile.readAsStringSync();
         if (jsonString.isNotEmpty) {
@@ -2217,8 +2340,6 @@ Notes: $notes
           suppliers = jsonList.cast<Map<String, dynamic>>();
         }
       }
-
-      // Check if supplier already exists
       for (final existingSupplier in suppliers) {
         final existingName = existingSupplier['name'] as String;
         if (_isFuzzyMatch(supplierName, existingName)) {
@@ -2226,22 +2347,24 @@ Notes: $notes
               'Supplier "$supplierName" already exists as "$existingName". Use update_supplier to modify existing suppliers.');
         }
       }
-
-      // Create new supplier entry
       final newSupplier = <String, dynamic>{
         'name': supplierName,
         'supplies': supplies,
       };
-
       if (account != null && account.isNotEmpty) {
         newSupplier['account'] = account;
       }
-
+      if (businessDescription.isNotEmpty) {
+        newSupplier['researchNotes'] = businessDescription;
+      }
+      if (aliasArguments.isNotEmpty) {
+        final sortedAliases = aliasArguments.toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        newSupplier['aliases'] = sortedAliases;
+      }
       suppliers.add(newSupplier);
       suppliers
           .sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
-
-      // Save to file
       const encoder = JsonEncoder.withIndent('  ');
       supplierFile.writeAsStringSync(encoder.convert(suppliers));
 
@@ -2269,6 +2392,45 @@ Notes: $notes
     final exactMatch = arguments['exactMatch'] as bool? ?? false;
 
     try {
+      // Prefer unified company file
+      final company = services.companyFile.currentCompanyFile;
+      if (company != null) {
+        final suppliers = company.suppliers;
+        SupplierModel? match;
+        if (exactMatch) {
+          try {
+            match = suppliers.firstWhere(
+              (s) => s.name.toLowerCase() == supplierName.toLowerCase(),
+            );
+          } catch (_) {
+            match = null;
+          }
+        } else {
+          match = SupplierListHelper.findSupplierByName(suppliers, supplierName);
+        }
+
+        if (match != null) {
+          return MCPToolResult(
+            content: [
+              MCPContent.text(jsonEncode({
+                'success': true,
+                'found': true,
+                'supplier': {
+                  'name': match.name,
+                  'supplies': match.supplies,
+                  if (match.account != null && match.account!.isNotEmpty)
+                    'account': match.account,
+                },
+                'searchTerm': supplierName,
+                'matchedName': match.name,
+                'matchType': exactMatch ? 'exact' : 'fuzzy',
+              })),
+            ],
+          );
+        }
+      }
+
+      // Fallback to legacy supplier file
       final supplierFile = File('$inputsPath/supplier_list.json');
       if (!supplierFile.existsSync()) {
         return MCPToolResult(
@@ -2294,8 +2456,7 @@ Notes: $notes
               'found': false,
               'searchTerm': supplierName,
               'message': 'Supplier not found, web research suggested',
-              'suggestion':
-                  'Use puppeteer_navigate to research this supplier online',
+              'suggestion': 'Use puppeteer_navigate to research this supplier online',
             })),
           ],
         );
@@ -2748,6 +2909,8 @@ Notes: $notes
               'aiGuessedName': aiGuessedName,
               'candidatesConsidered': candidateMatches.length,
               'matchingStrategy': selectedMatch['strategy'],
+              'matchedName': selectedMatch['matchedName'],
+              'matchSource': selectedMatch['matchSource'],
               'message':
                   'High confidence match found: ${selectedMatch['supplier']['name']}',
             })),
@@ -2769,6 +2932,8 @@ Notes: $notes
               'aiGuessedName': aiGuessedName,
               'candidatesConsidered': candidateMatches.length,
               'matchingStrategy': selectedMatch['strategy'],
+              'matchedName': selectedMatch['matchedName'],
+              'matchSource': selectedMatch['matchSource'],
               'warning':
                   'Low confidence match - manual verification recommended',
               'message':
@@ -2858,82 +3023,140 @@ Notes: $notes
         }
       }
 
-      // Ensure inputs directory exists
-      final inputsDir = Directory(inputsPath);
-      if (!inputsDir.existsSync()) {
-        inputsDir.createSync(recursive: true);
-      }
-
-      // Load existing supplier list
-      final supplierFile = File('$inputsPath/supplier_list.json');
-      List<Map<String, dynamic>> suppliers = [];
-
-      if (supplierFile.existsSync()) {
-        final jsonString = supplierFile.readAsStringSync();
-        if (jsonString.isNotEmpty) {
-          final jsonList = jsonDecode(jsonString) as List<dynamic>;
-          suppliers = jsonList.cast<Map<String, dynamic>>();
+      // Prefer unified company file; fallback to legacy file when unavailable (tests/legacy)
+      final company = services.companyFile.currentCompanyFile;
+      if (company == null) {
+        // Legacy fallback path
+        // Ensure inputs directory exists
+        final inputsDir = Directory(inputsPath);
+        if (!inputsDir.existsSync()) {
+          inputsDir.createSync(recursive: true);
         }
-      }
 
-      // Check if supplier already exists (case-insensitive fuzzy match)
-      int existingIndex = -1;
-      String? existingSupplies;
-
-      for (int i = 0; i < suppliers.length; i++) {
-        final existingName = suppliers[i]['name'] as String;
-        if (_isFuzzyMatch(supplierName, existingName)) {
-          existingIndex = i;
-          existingSupplies = suppliers[i]['supplies'] as String?;
-          break;
+        // Load existing supplier list
+        final supplierFile = File('$inputsPath/supplier_list.json');
+        List<Map<String, dynamic>> suppliers = [];
+        if (supplierFile.existsSync()) {
+          final jsonString = supplierFile.readAsStringSync();
+          if (jsonString.isNotEmpty) {
+            final jsonList = jsonDecode(jsonString) as List<dynamic>;
+            suppliers = jsonList.cast<Map<String, dynamic>>();
+          }
         }
-      }
 
-      bool wasUpdated = false;
-      bool wasAdded = false;
-      String? previousSupplies;
+        // Check if supplier already exists (case-insensitive fuzzy match)
+        int existingIndex = -1;
+        String? existingSupplies;
+        for (int i = 0; i < suppliers.length; i++) {
+          final existingName = suppliers[i]['name'] as String;
+          if (_isFuzzyMatch(supplierName, existingName)) {
+            existingIndex = i;
+            existingSupplies = suppliers[i]['supplies'] as String?;
+            break;
+          }
+        }
 
-      if (existingIndex >= 0) {
-        // Supplier exists - decide whether to update
-        previousSupplies = existingSupplies;
+        bool wasUpdated = false;
+        bool wasAdded = false;
+        String? previousSupplies;
 
-        if (replaceExisting ||
-            existingSupplies == null ||
-            existingSupplies.toLowerCase() == 'unknown' ||
-            existingSupplies.isEmpty) {
-          suppliers[existingIndex] = {
-            'name': supplierName, // Use the cleaned name
-            'supplies': supplies,
-          };
-          wasUpdated = true;
-
-          logger?.call('info',
-              'Updated existing supplier: $supplierName ($previousSupplies -> $supplies)');
+        if (existingIndex >= 0) {
+          previousSupplies = existingSupplies;
+          if (replaceExisting ||
+              existingSupplies == null ||
+              existingSupplies.toLowerCase() == 'unknown' ||
+              existingSupplies.isEmpty) {
+            suppliers[existingIndex] = {
+              'name': supplierName,
+              'supplies': supplies,
+            };
+            wasUpdated = true;
+            logger?.call('info',
+                'Updated existing supplier: $supplierName ($previousSupplies -> $supplies)');
+          } else {
+            logger?.call('info',
+                'Supplier exists with supplies "$existingSupplies", not updating (use replaceExisting=true to force)');
+          }
         } else {
-          logger?.call('info',
-              'Supplier exists with supplies "$existingSupplies", not updating (use replaceExisting=true to force)');
+          suppliers.add({
+            'name': supplierName,
+            'supplies': supplies,
+          });
+          wasAdded = true;
+          logger?.call('info', 'Added new supplier: $supplierName ($supplies)');
         }
-      } else {
-        // New supplier - add it
-        suppliers.add({
-          'name': supplierName,
+
+        if (wasAdded || wasUpdated) {
+          suppliers.sort(
+              (a, b) => (a['name'] as String).compareTo(b['name'] as String));
+          const encoder = JsonEncoder.withIndent('  ');
+          supplierFile.writeAsStringSync(encoder.convert(suppliers));
+        }
+
+        final response = {
+          'success': true,
+          'supplierName': supplierName,
           'supplies': supplies,
-        });
-        wasAdded = true;
+          'action': wasAdded ? 'added' : (wasUpdated ? 'updated' : 'no_change'),
+          'totalSuppliers': suppliers.length,
+          'previousSupplies': previousSupplies,
+          'rawTransactionText': rawTransactionText,
+          'businessDescription': businessDescription,
+          'suggestedAccount': suggestedAccountCode.isNotEmpty
+              ? {
+                  'code': suggestedAccountCode,
+                  'name': services.chartOfAccounts
+                          .getAccount(suggestedAccountCode)
+                          ?.name ??
+                      'Unknown',
+                }
+              : null,
+          'message': wasAdded
+              ? 'Added new supplier "$supplierName" with supplies "$supplies"'
+              : wasUpdated
+                  ? 'Updated supplier "$supplierName" from "$previousSupplies" to "$supplies"'
+                  : 'Supplier "$supplierName" already exists with supplies "$previousSupplies" (use replaceExisting=true to force update)',
+          'fuzzyMatching': existingIndex >= 0
+              ? 'Matched existing supplier using fuzzy logic'
+              : null,
+        };
 
-        logger?.call('info', 'Added new supplier: $supplierName ($supplies)');
+        return MCPToolResult(
+          content: [
+            MCPContent.text(jsonEncode(response)),
+          ],
+        );
       }
 
-      if (wasAdded || wasUpdated) {
-        // Sort suppliers alphabetically by name
-        suppliers.sort(
-            (a, b) => (a['name'] as String).compareTo(b['name'] as String));
+      // Use unified company file for supplier persistence
+      // (company is non-null here)
+      final beforeList = company.suppliers;
+      final beforeCount = beforeList.length;
+      final beforeMatch =
+          beforeList.isEmpty ? null : SupplierListHelper.findSupplierByName(beforeList, supplierName);
+      final previousSupplies = beforeMatch?.supplies;
 
-        // Save back to file with pretty formatting
-        const encoder = JsonEncoder.withIndent('  ');
-        final prettyJsonString = encoder.convert(suppliers);
-        supplierFile.writeAsStringSync(prettyJsonString);
-      }
+      final changed = services.companyFile.ensureSupplierExistsByName(
+        name: supplierName,
+        supplies: supplies,
+        replaceExistingSupplies: replaceExisting ||
+            (previousSupplies == null ||
+                previousSupplies.toLowerCase() == 'unknown' ||
+                previousSupplies.isEmpty),
+        persist: true,
+      );
+
+      final afterList = services.companyFile.currentCompanyFile?.suppliers ?? <SupplierModel>[];
+      final afterCount = afterList.length;
+      final afterMatch =
+          afterList.isEmpty ? null : SupplierListHelper.findSupplierByName(afterList, supplierName);
+
+      final wasAdded = changed && afterCount > beforeCount;
+      final wasUpdated = changed &&
+          !wasAdded &&
+          afterMatch != null &&
+          previousSupplies != null &&
+          afterMatch.supplies != previousSupplies;
 
       // Create response
       final response = {
@@ -2941,7 +3164,7 @@ Notes: $notes
         'supplierName': supplierName,
         'supplies': supplies,
         'action': wasAdded ? 'added' : (wasUpdated ? 'updated' : 'no_change'),
-        'totalSuppliers': suppliers.length,
+        'totalSuppliers': afterCount,
         'previousSupplies': previousSupplies,
         'rawTransactionText': rawTransactionText,
         'businessDescription': businessDescription,
@@ -2958,10 +3181,9 @@ Notes: $notes
             ? 'Added new supplier "$supplierName" with supplies "$supplies"'
             : wasUpdated
                 ? 'Updated supplier "$supplierName" from "$previousSupplies" to "$supplies"'
-                : 'Supplier "$supplierName" already exists with supplies "$existingSupplies" (use replaceExisting=true to force update)',
-        'fuzzyMatching': existingIndex >= 0
-            ? 'Matched existing supplier using fuzzy logic'
-            : null,
+                : 'Supplier "$supplierName" already exists with supplies "$previousSupplies" (use replaceExisting=true to force update)',
+        'fuzzyMatching':
+            (beforeMatch != null) ? 'Matched existing supplier using fuzzy logic' : null,
       };
 
       return MCPToolResult(
@@ -3041,6 +3263,53 @@ Notes: $notes
     }
 
     return variations;
+  }
+
+  List<String> _getSupplierNamesForMatching(Map<String, dynamic> supplierData) {
+    final names = <String>{};
+    final primary = supplierData['name'] as String?;
+    if (primary != null && primary.trim().isNotEmpty) {
+      names.add(primary.trim());
+    }
+    final aliases = (supplierData['aliases'] as List<dynamic>?)
+        ?.map((alias) => alias.toString().trim())
+        .where((alias) => alias.isNotEmpty);
+    if (aliases != null) {
+      names.addAll(aliases);
+    }
+    return names.toList();
+  }
+
+  List<String> _supplierKeywordHints(Map<String, dynamic> supplierData) {
+    final hints = <String>{};
+
+    void addText(String? text) {
+      if (text == null || text.trim().isEmpty) return;
+      final normalized = text
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+          .split(RegExp(r'\s+'))
+          .where((word) => word.length >= 4);
+      hints.addAll(normalized);
+    }
+
+    addText(supplierData['supplies'] as String?);
+    addText(supplierData['researchNotes'] as String?);
+
+    return hints.toList();
+  }
+
+  String? _firstMatchingKeyword(
+      String transactionDescription, List<String> keywords) {
+    if (keywords.isEmpty) return null;
+    final normalizedDescription = transactionDescription.toLowerCase();
+    for (final keyword in keywords) {
+      if (keyword.isEmpty) continue;
+      if (normalizedDescription.contains(keyword)) {
+        return keyword;
+      }
+    }
+    return null;
   }
 
   /// 📊 **AUDIT REPORT HANDLERS**: Plaintext reporting tools for AI audit purposes
@@ -3935,72 +4204,97 @@ Clean business name:''';
     int maxCandidates,
   ) {
     final candidates = <Map<String, dynamic>>[];
+    final transactionLower = transactionDescription.toLowerCase();
+    final aiGuessLower = aiGuessedName.toLowerCase();
 
     for (final supplier in suppliers) {
-      final supplierName = supplier['name'] as String;
+      final primaryName = supplier['name'] as String;
+      final keywordHints = _supplierKeywordHints(supplier);
+      final namesForMatching = _getSupplierNamesForMatching(supplier);
 
-      // Calculate multiple distance metrics
-      final nameToTransaction = _levenshteinDistance(
-          supplierName.toLowerCase(), transactionDescription.toLowerCase());
-      final nameToAiGuess = _levenshteinDistance(
-          supplierName.toLowerCase(), aiGuessedName.toLowerCase());
-      final normalizedNameToTransaction = _normalizedLevenshtein(
-          supplierName.toLowerCase(), transactionDescription.toLowerCase());
-      final normalizedNameToAiGuess = _normalizedLevenshtein(
-          supplierName.toLowerCase(), aiGuessedName.toLowerCase());
+      for (final candidateName in namesForMatching) {
+        final candidateLower = candidateName.toLowerCase();
+        final matchSource = _normalizeSupplierName(candidateName) ==
+                _normalizeSupplierName(primaryName)
+            ? 'primary_name'
+            : 'alias';
 
-      // Jaro-Winkler distance for better string similarity
-      final jaroWinklerToTransaction = _jaroWinklerSimilarity(
-          supplierName.toLowerCase(), transactionDescription.toLowerCase());
-      final jaroWinklerToAiGuess = _jaroWinklerSimilarity(
-          supplierName.toLowerCase(), aiGuessedName.toLowerCase());
+        // Calculate multiple distance metrics
+        final nameToTransaction =
+            _levenshteinDistance(candidateLower, transactionLower);
+        final nameToAiGuess =
+            _levenshteinDistance(candidateLower, aiGuessLower);
+        final normalizedNameToTransaction =
+            _normalizedLevenshtein(candidateLower, transactionLower);
+        final normalizedNameToAiGuess =
+            _normalizedLevenshtein(candidateLower, aiGuessLower);
 
-      // Substring matching bonus
-      final containsSupplierInTransaction = transactionDescription
-          .toLowerCase()
-          .contains(supplierName.toLowerCase());
-      final containsSupplierInAiGuess =
-          aiGuessedName.toLowerCase().contains(supplierName.toLowerCase());
-      final supplierContainsAiGuess =
-          supplierName.toLowerCase().contains(aiGuessedName.toLowerCase());
+        // Jaro-Winkler distance for better string similarity
+        final jaroWinklerToTransaction =
+            _jaroWinklerSimilarity(candidateLower, transactionLower);
+        final jaroWinklerToAiGuess =
+            _jaroWinklerSimilarity(candidateLower, aiGuessLower);
 
-      // Calculate composite score (higher is better)
-      double compositeScore = 0.0;
+        // Substring matching bonus
+        final containsSupplierInTransaction =
+            transactionLower.contains(candidateLower);
+        final containsSupplierInAiGuess = aiGuessLower.contains(candidateLower);
+        final supplierContainsAiGuess = candidateLower.contains(aiGuessLower);
 
-      // Jaro-Winkler similarity (0-1, higher is better)
-      compositeScore += jaroWinklerToTransaction * 0.3;
-      compositeScore += jaroWinklerToAiGuess * 0.4;
+        // Calculate composite score (higher is better)
+        double compositeScore = 0.0;
 
-      // Normalized Levenshtein (0-1, higher is better)
-      compositeScore += (1.0 - normalizedNameToTransaction) * 0.15;
-      compositeScore += (1.0 - normalizedNameToAiGuess) * 0.15;
+        // Jaro-Winkler similarity (0-1, higher is better)
+        compositeScore += jaroWinklerToTransaction * 0.3;
+        compositeScore += jaroWinklerToAiGuess * 0.4;
 
-      // Substring matching bonuses
-      if (containsSupplierInTransaction) compositeScore += 0.2;
-      if (containsSupplierInAiGuess) compositeScore += 0.3;
-      if (supplierContainsAiGuess) compositeScore += 0.25;
+        // Normalized Levenshtein (0-1, higher is better)
+        compositeScore += (1.0 - normalizedNameToTransaction) * 0.15;
+        compositeScore += (1.0 - normalizedNameToAiGuess) * 0.15;
 
-      // Fuzzy match bonus using existing logic
-      if (_isFuzzyMatch(aiGuessedName, supplierName)) {
-        compositeScore += 0.4;
+        // Substring matching bonuses
+        if (containsSupplierInTransaction) compositeScore += 0.2;
+        if (containsSupplierInAiGuess) compositeScore += 0.3;
+        if (supplierContainsAiGuess) compositeScore += 0.25;
+
+        // Fuzzy match bonus using existing logic
+        if (_isFuzzyMatch(aiGuessedName, candidateName)) {
+          compositeScore += 0.4;
+        }
+
+        // Alias bonus (helps when web-researched aliases are present)
+        if (matchSource == 'alias') {
+          compositeScore += 0.05;
+        }
+
+        // Keyword bonus from supplies / research notes
+        final keywordHit =
+            _firstMatchingKeyword(transactionDescription, keywordHints);
+        if (keywordHit != null) {
+          compositeScore += 0.05;
+        }
+
+        candidates.add({
+          'supplier': supplier,
+          'compositeScore': compositeScore,
+          'matchedName': candidateName,
+          'matchSource': matchSource,
+          'metrics': {
+            'nameToTransaction': nameToTransaction,
+            'nameToAiGuess': nameToAiGuess,
+            'normalizedNameToTransaction': normalizedNameToTransaction,
+            'normalizedNameToAiGuess': normalizedNameToAiGuess,
+            'jaroWinklerToTransaction': jaroWinklerToTransaction,
+            'jaroWinklerToAiGuess': jaroWinklerToAiGuess,
+            'containsSupplierInTransaction': containsSupplierInTransaction,
+            'containsSupplierInAiGuess': containsSupplierInAiGuess,
+            'supplierContainsAiGuess': supplierContainsAiGuess,
+            'fuzzyMatch': _isFuzzyMatch(aiGuessedName, candidateName),
+            'keywordHit': keywordHit,
+            'matchSource': matchSource,
+          },
+        });
       }
-
-      candidates.add({
-        'supplier': supplier,
-        'compositeScore': compositeScore,
-        'metrics': {
-          'nameToTransaction': nameToTransaction,
-          'nameToAiGuess': nameToAiGuess,
-          'normalizedNameToTransaction': normalizedNameToTransaction,
-          'normalizedNameToAiGuess': normalizedNameToAiGuess,
-          'jaroWinklerToTransaction': jaroWinklerToTransaction,
-          'jaroWinklerToAiGuess': jaroWinklerToAiGuess,
-          'containsSupplierInTransaction': containsSupplierInTransaction,
-          'containsSupplierInAiGuess': containsSupplierInAiGuess,
-          'supplierContainsAiGuess': supplierContainsAiGuess,
-          'fuzzyMatch': _isFuzzyMatch(aiGuessedName, supplierName),
-        },
-      });
     }
 
     // Sort by composite score (highest first) and take top candidates
@@ -4156,6 +4450,8 @@ Analysis:''';
         'reasoning': 'Highest composite similarity score',
         'strategy': 'fallback_score_based',
         'metrics': topCandidate['metrics'],
+        'matchedName': topCandidate['matchedName'],
+        'matchSource': topCandidate['matchSource'] ?? 'primary_name',
       };
     }
 
@@ -4429,6 +4725,13 @@ Analysis:''';
           logger?.call(
               'info', 'Created new supplier from web research: $supplierName');
 
+          _persistWebResearchInsight(
+            supplierName: supplierName,
+            transactionDescription: transactionDescription,
+            supplies: supplies,
+            researchNotes: reasoning,
+          );
+
           return MCPToolResult(
             content: [
               MCPContent.text(jsonEncode({
@@ -4478,6 +4781,115 @@ Analysis:''';
         ],
       );
     }
+  }
+
+  /// 🗂️ **WEB RESEARCH PERSISTENCE**: Save interpreted notes + aliases for future matches
+  void _persistWebResearchInsight({
+    required String supplierName,
+    required String transactionDescription,
+    required String supplies,
+    required String researchNotes,
+  }) {
+    try {
+      final supplierFile = File('$inputsPath/supplier_list.json');
+      if (!supplierFile.existsSync()) {
+        return;
+      }
+
+      final contents = supplierFile.readAsStringSync();
+      if (contents.trim().isEmpty) {
+        return;
+      }
+
+      final suppliers =
+          (jsonDecode(contents) as List).cast<Map<String, dynamic>>();
+      final aliasCandidate =
+          _aliasFromRawTransaction(transactionDescription, supplierName);
+      bool updated = false;
+
+      for (final supplier in suppliers) {
+        final existingName = supplier['name'] as String? ?? '';
+        if (existingName.isEmpty) continue;
+
+        if (!_isFuzzyMatch(existingName, supplierName)) {
+          continue;
+        }
+
+        if (supplies.trim().isNotEmpty &&
+            ((supplier['supplies'] as String?)?.trim().isEmpty ?? true)) {
+          supplier['supplies'] = supplies.trim();
+          updated = true;
+        }
+
+        if (researchNotes.trim().isNotEmpty) {
+          supplier['researchNotes'] = researchNotes.trim();
+          updated = true;
+        }
+
+        if (aliasCandidate != null) {
+          final aliases = ((supplier['aliases'] as List<dynamic>?) ?? [])
+              .map((alias) => alias.toString().trim())
+              .where((alias) => alias.isNotEmpty)
+              .toList();
+          final normalizedAlias = _normalizeSupplierName(aliasCandidate);
+          final aliasExists = aliases.any(
+            (alias) => _normalizeSupplierName(alias) == normalizedAlias,
+          );
+
+          if (!aliasExists &&
+              _normalizeSupplierName(existingName) != normalizedAlias) {
+            aliases.add(aliasCandidate);
+            aliases.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+            supplier['aliases'] = aliases;
+            updated = true;
+          }
+        }
+
+        break;
+      }
+
+      if (!updated) {
+        return;
+      }
+
+      suppliers
+          .sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+
+      const encoder = JsonEncoder.withIndent('  ');
+      supplierFile.writeAsStringSync(encoder.convert(suppliers));
+      _supplierCache = suppliers;
+      _supplierCacheMtime = supplierFile.statSync().modified;
+      _supplierCacheLoadedAt = DateTime.now();
+    } catch (e) {
+      logger?.call('warning',
+          'Failed to persist web research insight for $supplierName', e);
+    }
+  }
+
+  String? _aliasFromRawTransaction(
+      String rawTransactionText, String supplierName) {
+    final cleaned = rawTransactionText.trim();
+    if (cleaned.isEmpty) return null;
+
+    final isIncome = _looksLikeIncomeTransaction(cleaned);
+    final extracted = _fallbackSupplierExtraction(cleaned, isIncome).trim();
+    if (extracted.isEmpty) return null;
+
+    final normalizedAlias = _normalizeSupplierName(extracted);
+    final normalizedSupplier = _normalizeSupplierName(supplierName);
+
+    if (normalizedAlias == normalizedSupplier) {
+      return null;
+    }
+
+    return extracted;
+  }
+
+  bool _looksLikeIncomeTransaction(String text) {
+    final lowered = text.toLowerCase();
+    return lowered.contains('deposit') ||
+        lowered.contains('osko') ||
+        lowered.contains('transfer');
   }
 
   /// 📏 **LEVENSHTEIN DISTANCE**: Calculate edit distance between strings
@@ -5795,6 +6207,19 @@ Analysis:''';
   }
 
   List<Map<String, dynamic>> _loadSuppliers() {
+    // Prefer suppliers from unified company file
+    final company = services.companyFile.currentCompanyFile;
+    if (company != null && company.suppliers.isNotEmpty) {
+      return company.suppliers.map((s) {
+        return {
+          'name': s.name,
+          'supplies': s.supplies,
+          if (s.account != null && s.account!.isNotEmpty) 'account': s.account,
+        };
+      }).toList();
+    }
+
+    // Fallback to legacy file for backward compatibility
     final supplierFile = File('$inputsPath/supplier_list.json');
     if (!supplierFile.existsSync()) {
       _supplierCache = [];
@@ -5824,6 +6249,321 @@ Analysis:''';
 
     return List<Map<String, dynamic>>.from(_supplierCache!);
   }
+
+  Future<MCPToolResult> _handleAiAccountingMenuAction(
+      Map<String, dynamic> arguments) async {
+    final action = arguments['action'] as String;
+
+    switch (action) {
+      case 'import_all_bank_statements':
+        final commandResult = await _runDartWorkflow(
+          description: 'Import all bank statements',
+          args: ['run', 'bin/import_transactions.dart'],
+        );
+        return _buildCommandResult(action, commandResult);
+
+      case 'import_bank_statement_file':
+        final filePath = arguments['filePath'] as String?;
+        if (filePath == null || filePath.trim().isEmpty) {
+          throw MCPServerException(
+              'filePath is required for import_bank_statement_file');
+        }
+        final resolvedFile = path.normalize(path.absolute(filePath));
+        if (!File(resolvedFile).existsSync()) {
+          throw MCPServerException('CSV file not found at $resolvedFile');
+        }
+        final bankCodeArg = arguments['bankCode'] as String?;
+        final args = [
+          'run',
+          'bin/import_transactions.dart',
+          '--file=$resolvedFile',
+        ];
+        if (bankCodeArg != null && bankCodeArg.trim().isNotEmpty) {
+          final normalized = _normalizeBankCode(bankCodeArg);
+          args.add('--bank=$normalized');
+        }
+        final fileImportResult = await _runDartWorkflow(
+          description: 'Import specific bank statement',
+          args: args,
+        );
+        return _buildCommandResult(action, fileImportResult);
+
+      case 'categorise_uncategorised_transactions':
+        final categoriseResult = await _runDartWorkflow(
+          description: 'Categorise uncategorised transactions',
+          args: ['run', 'bin/categorise_transactions.dart'],
+        );
+        return _buildCommandResult(action, categoriseResult);
+
+      case 'generate_financial_reports':
+        final reportResult = await _runDartWorkflow(
+          description: 'Generate financial reports',
+          args: ['run', 'bin/generate_reports.dart'],
+        );
+        return _buildCommandResult(action, reportResult);
+
+      case 'update_bank_statement_mapping':
+        final mappingFilename = arguments['mappingFilename'] as String?;
+        final bankCodeArg = arguments['bankCode'] as String?;
+        if (mappingFilename == null || mappingFilename.trim().isEmpty) {
+          throw MCPServerException(
+              'mappingFilename is required for update_bank_statement_mapping');
+        }
+        if (bankCodeArg == null || bankCodeArg.trim().isEmpty) {
+          throw MCPServerException(
+              'bankCode is required for update_bank_statement_mapping');
+        }
+
+        final normalizedBankCode = _normalizeBankCode(bankCodeArg);
+        final configDirectory = arguments['configDirectory'] as String?;
+        final mappingResult = await _updateBankStatementMapping(
+          mappingName: mappingFilename,
+          bankCode: normalizedBankCode,
+          configDirectory: configDirectory,
+        );
+        return _buildSuccessResult(action, mappingResult);
+
+      case 'export_general_journal_csv':
+        final generalExport = await _exportGeneralJournalCsv(
+          destinationPath: arguments['destinationPath'] as String?,
+        );
+        return _buildSuccessResult(action, generalExport);
+
+      case 'export_transaction_summary_csv':
+        final summaryExport = await _exportTransactionSummaryCsv(
+          destinationPath: arguments['destinationPath'] as String?,
+        );
+        return _buildSuccessResult(action, summaryExport);
+
+      default:
+        throw MCPServerException('Unknown AI accounting menu action: $action');
+    }
+  }
+
+  Future<_CommandResult> _runDartWorkflow({
+    required String description,
+    required List<String> args,
+  }) async {
+    final command = 'dart ${args.join(' ')}';
+    logger?.call('info', 'Executing $description via $command');
+
+    final process = await Process.start(
+      'dart',
+      args,
+      workingDirectory: Directory.current.path,
+    );
+
+    final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+    final stderrFuture = process.stderr.transform(utf8.decoder).join();
+    final exitCode = await process.exitCode;
+    final stdoutText = await stdoutFuture;
+    final stderrText = await stderrFuture;
+
+    if (exitCode != 0) {
+      logger?.call('error',
+          '$description failed (exit code $exitCode). STDERR: $stderrText');
+      throw MCPServerException(
+          '$description failed (exit code $exitCode). stderr: $stderrText');
+    }
+
+    return _CommandResult(
+      description: description,
+      command: command,
+      stdout: stdoutText,
+      stderr: stderrText,
+      exitCode: exitCode,
+    );
+  }
+
+  Future<Map<String, dynamic>> _updateBankStatementMapping({
+    required String mappingName,
+    required String bankCode,
+    String? configDirectory,
+  }) async {
+    final configDir = path.normalize(path.absolute(configDirectory ??
+        Platform.environment['AI_ACCOUNTING_CONFIG_DIR'] ??
+        'config'));
+    final sanitizedKey = _sanitizeMappingFilename(mappingName);
+    final mappingFile =
+        File(path.join(configDir, 'bank_account_mappings.json'));
+
+    Map<String, dynamic> mappings = {};
+    if (mappingFile.existsSync()) {
+      final contents = mappingFile.readAsStringSync();
+      if (contents.trim().isNotEmpty) {
+        final decoded = jsonDecode(contents);
+        if (decoded is Map<String, dynamic>) {
+          mappings = decoded;
+        }
+      }
+    }
+
+    mappings[sanitizedKey] = bankCode;
+    final ordered = Map.fromEntries(
+      mappings.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+    );
+    final encoder = const JsonEncoder.withIndent('  ');
+    mappingFile
+      ..createSync(recursive: true)
+      ..writeAsStringSync(encoder.convert(ordered));
+
+    return {
+      'configDirectory': configDir,
+      'mappingFile': mappingFile.path,
+      'mappingKey': sanitizedKey,
+      'bankCode': bankCode,
+      'message': 'Saved mapping $sanitizedKey -> $bankCode',
+    };
+  }
+
+  Future<Map<String, dynamic>> _exportGeneralJournalCsv(
+      {String? destinationPath}) async {
+    if (!services.generalJournal.loadEntries()) {
+      throw MCPServerException('Failed to load general journal entries.');
+    }
+    final entries = services.generalJournal.getAllEntries();
+    if (entries.isEmpty) {
+      return {
+        'exported': false,
+        'message': 'No journal entries available to export.',
+      };
+    }
+
+    final defaultPath = path.join(
+      Directory.current.path,
+      'data',
+      'general_journal_export.csv',
+    );
+    final resolvedPath = _resolveDestinationPath(
+      providedPath: destinationPath,
+      fallbackPath: defaultPath,
+    );
+    final exporter = GeneralJournalCsvExporter(services);
+    exporter.exportToFile(resolvedPath, entries: entries);
+
+    final rowCount = entries.fold<int>(
+      0,
+      (sum, entry) => sum + entry.debits.length + entry.credits.length,
+    );
+
+    return {
+      'exported': true,
+      'path': resolvedPath,
+      'rowCount': rowCount,
+      'message': 'Exported $rowCount journal rows to $resolvedPath',
+    };
+  }
+
+  Future<Map<String, dynamic>> _exportTransactionSummaryCsv(
+      {String? destinationPath}) async {
+    if (!services.generalJournal.loadEntries()) {
+      throw MCPServerException('Failed to load general journal entries.');
+    }
+    final entries = services.generalJournal.getAllEntries();
+    if (entries.isEmpty) {
+      return {
+        'exported': false,
+        'message': 'No journal entries available to export.',
+      };
+    }
+
+    final defaultPath = path.join(
+      Directory.current.path,
+      'data',
+      'transaction_summary_export.csv',
+    );
+    final resolvedPath = _resolveDestinationPath(
+      providedPath: destinationPath,
+      fallbackPath: defaultPath,
+    );
+    final gstCode = Platform.environment['GST_CLEARING_ACCOUNT_CODE'] ?? '506';
+    final exporter = TransactionSummaryCsvExporter(
+      services,
+      gstClearingAccountCode: gstCode,
+    );
+    exporter.exportToFile(resolvedPath, entries: entries);
+
+    return {
+      'exported': true,
+      'path': resolvedPath,
+      'rowCount': entries.length,
+      'message':
+          'Exported ${entries.length} transaction summary rows to $resolvedPath',
+    };
+  }
+
+  MCPToolResult _buildCommandResult(
+      String action, _CommandResult commandResult) {
+    return MCPToolResult(content: [
+      MCPContent.text(jsonEncode({
+        'action': action,
+        'success': commandResult.exitCode == 0,
+        'command': commandResult.command,
+        'stdout': commandResult.stdout,
+        'stderr': commandResult.stderr,
+      })),
+    ]);
+  }
+
+  MCPToolResult _buildSuccessResult(
+      String action, Map<String, dynamic> payload) {
+    return MCPToolResult(content: [
+      MCPContent.text(jsonEncode({
+        'action': action,
+        'success': true,
+        ...payload,
+      })),
+    ]);
+  }
+
+  String _resolveDestinationPath({
+    String? providedPath,
+    required String fallbackPath,
+  }) {
+    final rawPath = (providedPath == null || providedPath.trim().isEmpty)
+        ? fallbackPath
+        : providedPath;
+    final resolved = path.normalize(path.absolute(rawPath));
+    final parentDir = Directory(path.dirname(resolved));
+    if (!parentDir.existsSync()) {
+      parentDir.createSync(recursive: true);
+    }
+    return resolved;
+  }
+
+  String _normalizeBankCode(String? bankCode) {
+    if (bankCode == null || bankCode.trim().isEmpty) {
+      throw MCPServerException('Bank code cannot be empty.');
+    }
+    final normalized = bankCode.trim().padLeft(3, '0');
+    final account = services.chartOfAccounts.getAccount(normalized);
+    if (account == null || account.type != AccountType.bank) {
+      throw MCPServerException(
+          'Bank code $normalized does not exist or is not a bank account.');
+    }
+    return normalized;
+  }
+
+  String _sanitizeMappingFilename(String value) {
+    final base = path.basename(value.trim());
+    return base.replaceAll(RegExp(r'\.csv$', caseSensitive: false), '');
+  }
+}
+
+class _CommandResult {
+  const _CommandResult({
+    required this.description,
+    required this.command,
+    required this.stdout,
+    required this.stderr,
+    required this.exitCode,
+  });
+
+  final String description;
+  final String command;
+  final String stdout;
+  final String stderr;
+  final int exitCode;
 }
 
 /// 🔧 **EMPTY TOOL REGISTRY**: Minimal registry for AI agents without tools
